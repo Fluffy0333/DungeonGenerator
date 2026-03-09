@@ -16,6 +16,7 @@ public class DungeonGenerator : MonoBehaviour
     public GameObject cube;
     private RectInt savedRoom;
     private int sizeToRemove;
+    private bool widthSplit;
     private bool canSplit = true;
     private bool checkSplitDone = false;
     private int currentCheckingRoom = 0;
@@ -80,8 +81,19 @@ public class DungeonGenerator : MonoBehaviour
     {
         int selectedRoomInt = Random.Range(0, toDoRooms.Count);
         selectedRoom = toDoRooms[selectedRoomInt];
-
-        if (selectedRoom.width > minSize * 2)
+        if(selectedRoom.width > minSize * 2 && selectedRoom.height > minSize * 2)
+        {
+            widthSplit = Random.Range(0, 1f) > 0.5f;
+            if(widthSplit)
+            {
+                ReduceWidth();
+            }
+            else
+            {
+                ReduceHeight();
+            }
+        }
+        else if (selectedRoom.width > minSize * 2)
         {
             ReduceWidth();
         }
@@ -105,8 +117,9 @@ public class DungeonGenerator : MonoBehaviour
     {
         doneRooms.Add(roomSelected);
         toDoRooms.Remove(roomSelected);
-        GameObject spawnedCube = Instantiate(cube, new(roomSelected.x + roomSelected.width / 2, transform.position.y, roomSelected.y + roomSelected.height / 2), Quaternion.identity);
-        spawnedCube.name = $"cube({doneRooms.Count - 1})";
+        //add for debugging with cubes
+        // GameObject spawnedCube = Instantiate(cube, new(roomSelected.x + roomSelected.width / 2, transform.position.y, roomSelected.y + roomSelected.height / 2), Quaternion.identity);
+        // spawnedCube.name = $"cube({doneRooms.Count - 1})";
     }
     private void ReduceWidth()
     {
