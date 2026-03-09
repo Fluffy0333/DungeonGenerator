@@ -1,86 +1,93 @@
+using System.Collections;
 using System.Collections.Generic;
+using NaughtyAttributes;
 using UnityEngine;
-using UnityEngine.UIElements;
 
 public class DungeonGenerator : MonoBehaviour
 {
-    //put rooms in 2 lists done and not yet done
-    //choose a random room in not yet done and split it (make two rooms in one)
-    //make the split random (e.g 60/40 30/70)
-    //if room is too small set it to done
-    //randomly pick between height and width
     public RectInt selectedRoom = new(0, 0, 100, 150);
     public List<RectInt> toDoRooms;
     public List<RectInt> doneRooms;
+    public List<RectInt> doors;
     public int minSize = 7;
-    public enum SpawnType { automatic, manual };
+    public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
+    public float cutSpeed = 0.1f;
+    public GameObject cube;
     private RectInt savedRoom;
     private int sizeToRemove;
-    private bool reduceWidth;
+    private bool canSplit = true;
+    private bool checkSplitDone = false;
+    private int currentCheckingRoom = 0;
+    [Button("restart Generation")]
+    private void RestartRoom()
+    {
+        selectedRoom = new(0, 0, 100, 150);
+        doneRooms.Clear();
+        toDoRooms.Clear();
+        doors.Clear();
+        toDoRooms.Add(selectedRoom);
+        checkSplitDone = false;
+        currentCheckingRoom = 0;
+    }
     void Start()
     {
         toDoRooms.Add(selectedRoom);
     }
     void Update()
     {
-        switch (spawnType)
+        if (toDoRooms.Count > 0)
         {
-            case SpawnType.automatic:
-                if (toDoRooms.Count > 0)
-                {
+            switch (spawnType)
+            {
+                case SpawnType.automatic:
                     SplitRoom();
-                }
-                break;
-            case SpawnType.manual:
-                if (Input.GetKeyDown(KeyCode.Space))
-                {
-                    SplitRoom();
-                }
-                break;
+                    break;
+                case SpawnType.manual:
+                    if (Input.GetKeyDown(KeyCode.Space))
+                    {
+                        SplitRoom();
+                    }
+                    break;
+                case SpawnType.slow:
+                    if (canSplit)
+                    {
+                        StartCoroutine(Wait());
+                    }
+                    break;
+            }
+        }
+        else if (checkSplitDone == false)
+        {
+            checkSplitDone = true;
+            CheckSplits();
         }
         foreach (RectInt room in toDoRooms)
         {
-            AlgorithmsUtils.DebugRectInt(room, Color.green);
+            AlgorithmsUtils.DebugRectInt(room, Color.red);
         }
         foreach (RectInt room in doneRooms)
         {
-            AlgorithmsUtils.DebugRectInt(room, Color.yellow);
+            AlgorithmsUtils.DebugRectInt(room, Color.green);
         }
+        foreach (RectInt doorway in doors)
+        {
+            AlgorithmsUtils.DebugRectInt(doorway, Color.magenta);
+        }
+        AlgorithmsUtils.DebugRectInt(selectedRoom, Color.blue);
     }
     private void SplitRoom()
     {
         int selectedRoomInt = Random.Range(0, toDoRooms.Count);
         selectedRoom = toDoRooms[selectedRoomInt];
-        reduceWidth = Random.value > 0.5f;
 
         if (selectedRoom.width > minSize * 2)
         {
-            sizeToRemove = Random.Range(minSize, selectedRoom.width - minSize);
-            savedRoom = new(Mathf.CeilToInt(selectedRoom.width - sizeToRemove) + selectedRoom.xMin, selectedRoom.yMin, Mathf.CeilToInt(sizeToRemove), selectedRoom.height);
-            if (savedRoom.width > minSize || savedRoom.height > minSize)
-            {
-                toDoRooms.Add(savedRoom);
-            }
-            else
-            {
-                AddDoneRoom(savedRoom);
-            }
-            selectedRoom.width = Mathf.CeilToInt(selectedRoom.width - sizeToRemove + 1);
+            ReduceWidth();
         }
-        else if(selectedRoom.height > minSize * 2)
+        else if (selectedRoom.height > minSize * 2)
         {
-            sizeToRemove = Random.Range(minSize, selectedRoom.height - minSize);
-            savedRoom = new(selectedRoom.xMin, Mathf.CeilToInt(selectedRoom.height - sizeToRemove) + selectedRoom.yMin, selectedRoom.width, Mathf.CeilToInt(sizeToRemove));
-            if (savedRoom.width > minSize || savedRoom.height > minSize)
-            {
-                toDoRooms.Add(savedRoom);
-            }
-            else
-            {
-                AddDoneRoom(savedRoom);
-            }
-            selectedRoom.height = Mathf.CeilToInt(selectedRoom.height - sizeToRemove + 1);
+            ReduceHeight();
         }
         else
         {
@@ -98,55 +105,87 @@ public class DungeonGenerator : MonoBehaviour
     {
         doneRooms.Add(roomSelected);
         toDoRooms.Remove(roomSelected);
+        GameObject spawnedCube = Instantiate(cube, new(roomSelected.x + roomSelected.width / 2, transform.position.y, roomSelected.y + roomSelected.height / 2), Quaternion.identity);
+        spawnedCube.name = $"cube({doneRooms.Count - 1})";
     }
     private void ReduceWidth()
     {
-        // if (selectedRoom.width <= minSize * 2 && selectedRoom.height > minSize * 2)
-        // {
-        //     ReduceHeight();
-        //     return;
-        // }
-        // else if (selectedRoom.height <= minSize * 2)
-        // {
-        //     Debug.LogWarning("Done room found in not done list!");
-        //     AddDoneRoom(selectedRoom);
-        //     return;
-        // }
-        // sizeToRemove = Random.Range(minSize, selectedRoom.width - minSize);
-        // savedRoom = new(Mathf.CeilToInt(selectedRoom.width - sizeToRemove) + selectedRoom.xMin, selectedRoom.yMin, Mathf.CeilToInt(sizeToRemove), selectedRoom.height);
-        // if (savedRoom.width > minSize || savedRoom.height > minSize)
-        // {
-        //     toDoRooms.Add(savedRoom);
-        // }
-        // else
-        // {
-        //     AddDoneRoom(savedRoom);
-        // }
-        // selectedRoom.width = Mathf.CeilToInt(selectedRoom.width - sizeToRemove + 1);
+        sizeToRemove = Random.Range(minSize, selectedRoom.width - minSize);
+        savedRoom = new(selectedRoom.width - sizeToRemove + selectedRoom.xMin, selectedRoom.yMin, sizeToRemove, selectedRoom.height);
+        if (savedRoom.width > minSize || savedRoom.height > minSize)
+        {
+            toDoRooms.Add(savedRoom);
+        }
+        else
+        {
+            AddDoneRoom(savedRoom);
+        }
+        selectedRoom.width = selectedRoom.width - sizeToRemove + 1;
     }
     private void ReduceHeight()
     {
-        // if (selectedRoom.height <= minSize * 2 && selectedRoom.width > minSize * 2)
-        // {
-        //     ReduceWidth();
-        //     return;
-        // }
-        // else if (selectedRoom.width <= minSize * 2)
-        // {
-        //     Debug.LogWarning("Done room found in not done list!");
-        //     AddDoneRoom(selectedRoom);
-        //     return;
-        // }
-        // sizeToRemove = Random.Range(minSize, selectedRoom.height - minSize);
-        // savedRoom = new(selectedRoom.xMin, Mathf.CeilToInt(selectedRoom.height - sizeToRemove) + selectedRoom.yMin, selectedRoom.width, Mathf.CeilToInt(sizeToRemove));
-        // if (savedRoom.width > minSize || savedRoom.height > minSize)
-        // {
-        //     toDoRooms.Add(savedRoom);
-        // }
-        // else
-        // {
-        //     AddDoneRoom(savedRoom);
-        // }
-        // selectedRoom.height = Mathf.CeilToInt(selectedRoom.height - sizeToRemove + 1);
+        sizeToRemove = Random.Range(minSize, selectedRoom.height - minSize);
+        savedRoom = new(selectedRoom.xMin, selectedRoom.height - sizeToRemove + selectedRoom.yMin, selectedRoom.width, sizeToRemove);
+        if (savedRoom.width > minSize || savedRoom.height > minSize)
+        {
+            toDoRooms.Add(savedRoom);
+        }
+        else
+        {
+            AddDoneRoom(savedRoom);
+        }
+        selectedRoom.height = selectedRoom.height - sizeToRemove + 1;
+    }
+    private void CheckSplits()
+    {
+        for (int i = 0; i < doneRooms.Count; i++)
+        {
+            for (int j = i + 1; j < doneRooms.Count; j++)
+            {
+                if (AlgorithmsUtils.Intersects(doneRooms[i], doneRooms[j]))
+                {
+                    savedRoom = AlgorithmsUtils.Intersect(doneRooms[i], doneRooms[j]);
+                    if (savedRoom.width < minSize / 2 && savedRoom.height < minSize / 2)
+                    {
+                        Debug.LogWarning("Door found to be too small");
+                    }
+                    else if (savedRoom.width == 3 || savedRoom.height == 3)
+                    {
+                        Debug.LogWarning("Door found to be in a too narrow area");
+                    }
+                    else if (savedRoom.width > minSize / 2)
+                    {
+                        while (savedRoom.width > minSize / 2)
+                        {
+                            savedRoom.width--;
+                            savedRoom.width--;
+                            savedRoom.x++;
+                        }
+                        doors.Add(savedRoom);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[i].x + doneRooms[j].width / 2, 0, doneRooms[i].y + doneRooms[i].height / 2), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[j].x + doneRooms[j].width / 2, 0, doneRooms[j].y + doneRooms[j].height / 2), Color.red, float.PositiveInfinity);
+                    }
+                    else if (savedRoom.height > minSize / 2)
+                    {
+                        while (savedRoom.height > minSize / 2)
+                        {
+                            savedRoom.height--;
+                            savedRoom.height--;
+                            savedRoom.y++;
+                        }
+                        doors.Add(savedRoom);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[i].x + doneRooms[j].width / 2, 0, doneRooms[i].y + doneRooms[i].height / 2), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[j].x + doneRooms[j].width / 2, 0, doneRooms[j].y + doneRooms[j].height / 2), Color.red, float.PositiveInfinity);
+                    }
+                }
+            }
+        }
+    }
+    IEnumerator Wait()
+    {
+        canSplit = false;
+        yield return new WaitForSeconds(cutSpeed);
+        SplitRoom();
+        canSplit = true;
     }
 }
