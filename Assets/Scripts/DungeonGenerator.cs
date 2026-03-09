@@ -112,7 +112,7 @@ public class DungeonGenerator : MonoBehaviour
     {
         sizeToRemove = Random.Range(minSize, selectedRoom.width - minSize);
         savedRoom = new(selectedRoom.width - sizeToRemove + selectedRoom.xMin, selectedRoom.yMin, sizeToRemove, selectedRoom.height);
-        if (savedRoom.width > minSize || savedRoom.height > minSize)
+        if (savedRoom.width > minSize * 2 || savedRoom.height > minSize * 2)
         {
             toDoRooms.Add(savedRoom);
         }
@@ -126,7 +126,7 @@ public class DungeonGenerator : MonoBehaviour
     {
         sizeToRemove = Random.Range(minSize, selectedRoom.height - minSize);
         savedRoom = new(selectedRoom.xMin, selectedRoom.height - sizeToRemove + selectedRoom.yMin, selectedRoom.width, sizeToRemove);
-        if (savedRoom.width > minSize || savedRoom.height > minSize)
+        if (savedRoom.width > minSize * 2 || savedRoom.height > minSize * 2)
         {
             toDoRooms.Add(savedRoom);
         }
@@ -162,8 +162,8 @@ public class DungeonGenerator : MonoBehaviour
                             savedRoom.x++;
                         }
                         doors.Add(savedRoom);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[i].x + doneRooms[j].width / 2, 0, doneRooms[i].y + doneRooms[i].height / 2), Color.red, float.PositiveInfinity);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[j].x + doneRooms[j].width / 2, 0, doneRooms[j].y + doneRooms[j].height / 2), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[i].x + doneRooms[i].width / 2f, 0, doneRooms[i].y + doneRooms[i].height / 2f), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[j].x + doneRooms[j].width / 2f, 0, doneRooms[j].y + doneRooms[j].height / 2f), Color.red, float.PositiveInfinity);
                     }
                     else if (savedRoom.height > minSize / 2)
                     {
@@ -174,8 +174,8 @@ public class DungeonGenerator : MonoBehaviour
                             savedRoom.y++;
                         }
                         doors.Add(savedRoom);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[i].x + doneRooms[j].width / 2, 0, doneRooms[i].y + doneRooms[i].height / 2), Color.red, float.PositiveInfinity);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2, 0, savedRoom.y + savedRoom.height / 2), new(doneRooms[j].x + doneRooms[j].width / 2, 0, doneRooms[j].y + doneRooms[j].height / 2), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[i].x + doneRooms[i].width / 2f, 0, doneRooms[i].y + doneRooms[i].height / 2f), Color.red, float.PositiveInfinity);
+                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[j].x + doneRooms[j].width / 2f, 0, doneRooms[j].y + doneRooms[j].height / 2f), Color.red, float.PositiveInfinity);
                     }
                 }
             }
