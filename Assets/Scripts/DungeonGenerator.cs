@@ -231,7 +231,6 @@ public class DungeonGenerator : MonoBehaviour
         }
     }
 }
-[System.Serializable]
 public class Connections
 {
     public RectInt door;
