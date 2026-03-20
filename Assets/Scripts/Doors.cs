@@ -2,15 +2,38 @@ using UnityEngine;
 
 public class Doors : MonoBehaviour
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    public static RectInt MakeDoor(RectInt savedRoom)
     {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
+        if (savedRoom.width == 3 || savedRoom.height == 3)
+        {
+            Debug.LogWarning("Door found to be in a too narrow area");
+        }
+        else if (savedRoom.width > 2)
+        {
+            while (savedRoom.width > 2)
+            {
+                savedRoom.width--;
+                if (savedRoom.width > 2)
+                {
+                    savedRoom.width--;
+                    savedRoom.x++;
+                }
+            }
+            return savedRoom;
+        }
+        else if (savedRoom.height > 2)
+        {
+            while (savedRoom.height > 2)
+            {
+                savedRoom.height--;
+                if (savedRoom.height > 2)
+                {
+                    savedRoom.height--;
+                    savedRoom.y++;
+                }
+            }
+            return savedRoom;
+        }
+        return RectInt.zero;
     }
 }

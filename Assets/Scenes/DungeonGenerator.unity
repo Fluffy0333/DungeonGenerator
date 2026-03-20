@@ -423,10 +423,11 @@ MonoBehaviour:
     height: 150
   toDoRooms: []
   doneRooms: []
-  doors: []
+  doorsList: []
+  connections: []
   minSize: 7
-  spawnType: 0
-  cutSpeed: 0.1
+  spawnType: 2
+  cutSpeed: 0.025
   cube: {fileID: 2589280522366959548, guid: 4e47f300729fa8845917d8fc6d2827ce, type: 3}
 --- !u!4 &1310489900
 Transform:

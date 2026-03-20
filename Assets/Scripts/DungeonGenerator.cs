@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using NaughtyAttributes;
+using UnityEditor.MemoryProfiler;
 using UnityEngine;
 
 public class DungeonGenerator : MonoBehaviour
@@ -8,7 +9,8 @@ public class DungeonGenerator : MonoBehaviour
     public RectInt selectedRoom = new(0, 0, 100, 150);
     public List<RectInt> toDoRooms;
     public List<RectInt> doneRooms;
-    public List<RectInt> doors;
+    public List<RectInt> doorsList;
+    public List<Connections> connections = new();
     public int minSize = 7;
     public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
@@ -26,7 +28,8 @@ public class DungeonGenerator : MonoBehaviour
         selectedRoom = new(0, 0, 100, 150);
         doneRooms.Clear();
         toDoRooms.Clear();
-        doors.Clear();
+        doorsList.Clear();
+        connections.Clear();
         toDoRooms.Add(selectedRoom);
         checkSplitDone = false;
         currentCheckingRoom = 0;
@@ -37,31 +40,54 @@ public class DungeonGenerator : MonoBehaviour
     }
     void Update()
     {
-        if (toDoRooms.Count > 0)
+        switch (spawnType)
         {
-            switch (spawnType)
-            {
-                case SpawnType.automatic:
+            case SpawnType.automatic:
+                if (toDoRooms.Count > 0)
+                {
                     SplitRoom();
-                    break;
-                case SpawnType.manual:
-                    if (Input.GetKeyDown(KeyCode.Space))
+                }
+                else if (checkSplitDone == false)
+                {
+                    checkSplitDone = true;
+                    for (int i = 0; i < doneRooms.Count; i++)
+                    {
+                        for (int j = i + 1; j < doneRooms.Count; j++)
+                        {
+                            CheckSplits(i, j);
+                        }
+                    }
+                }
+                break;
+            case SpawnType.manual:
+                if (toDoRooms.Count > 0)
+                {
+                    if (Input.GetKey(KeyCode.Space))
                     {
                         SplitRoom();
                     }
-                    break;
-                case SpawnType.slow:
+                }
+                else if (checkSplitDone == false)
+                {
+                    checkSplitDone = true;
+                    StartCoroutine(SplitsManualRoom());
+                }
+                break;
+            case SpawnType.slow:
+                if (toDoRooms.Count > 0)
+                {
                     if (canSplit)
                     {
                         StartCoroutine(Wait());
+                        SplitRoom();
                     }
-                    break;
-            }
-        }
-        else if (checkSplitDone == false)
-        {
-            checkSplitDone = true;
-            CheckSplits();
+                }
+                else if (checkSplitDone == false)
+                {
+                    checkSplitDone = true;
+                    StartCoroutine(SplitSlowRoom());
+                }
+                break;
         }
         foreach (RectInt room in toDoRooms)
         {
@@ -71,9 +97,14 @@ public class DungeonGenerator : MonoBehaviour
         {
             AlgorithmsUtils.DebugRectInt(room, Color.green);
         }
-        foreach (RectInt doorway in doors)
+        foreach (RectInt doorway in doorsList)
         {
             AlgorithmsUtils.DebugRectInt(doorway, Color.magenta);
+        }
+        foreach (Connections connection in connections)
+        {
+            Debug.DrawLine(new(connection.door.x + connection.door.width / 2f, 0, connection.door.y + connection.door.height / 2f), new(connection.roomOne.x + connection.roomOne.width / 2f, 0, connection.roomOne.y + connection.roomOne.height / 2f), Color.red);
+            Debug.DrawLine(new(connection.door.x + connection.door.width / 2f, 0, connection.door.y + connection.door.height / 2f), new(connection.roomTwo.x + connection.roomTwo.width / 2f, 0, connection.roomTwo.y + connection.roomTwo.height / 2f), Color.red);
         }
         AlgorithmsUtils.DebugRectInt(selectedRoom, Color.blue);
     }
@@ -149,48 +180,18 @@ public class DungeonGenerator : MonoBehaviour
         }
         selectedRoom.height = selectedRoom.height - sizeToRemove + 1;
     }
-    private void CheckSplits()
+    private void CheckSplits(int i, int j)
     {
-        for (int i = 0; i < doneRooms.Count; i++)
+        if (AlgorithmsUtils.Intersects(doneRooms[i], doneRooms[j]))
         {
-            for (int j = i + 1; j < doneRooms.Count; j++)
+            savedRoom = AlgorithmsUtils.Intersect(doneRooms[i], doneRooms[j]);
+            savedRoom = Doors.MakeDoor(savedRoom);
+            if (savedRoom != RectInt.zero)
             {
-                if (AlgorithmsUtils.Intersects(doneRooms[i], doneRooms[j]))
-                {
-                    savedRoom = AlgorithmsUtils.Intersect(doneRooms[i], doneRooms[j]);
-                    if (savedRoom.width == 3 || savedRoom.height == 3)
-                    {
-                        Debug.LogWarning("Door found to be in a too narrow area");
-                    }
-                    else if (savedRoom.width > 2)
-                    {
-                        while (savedRoom.width > 2)
-                        {
-                            savedRoom.width--;
-                            if (savedRoom.width > 2)
-                            {
-                                savedRoom.width--;
-                                savedRoom.x++;
-                            }
-                        }
-                        doors.Add(savedRoom);
-                        GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
-                    }
-                    else if (savedRoom.height > 2)
-                    {
-                        while (savedRoom.height > 2)
-                        {
-                            savedRoom.height--;
-                            if (savedRoom.height > 2)
-                            {
-                                savedRoom.height--;
-                                savedRoom.y++;
-                            }
-                        }
-                        doors.Add(savedRoom);
-                        GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
-                    }
-                }
+                doorsList.Add(savedRoom);
+                //savedRoom, doneRooms[i], doneRooms[j]
+                connections.Add(new Connections(savedRoom, doneRooms[i], doneRooms[j]));
+                GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
             }
         }
     }
@@ -198,7 +199,50 @@ public class DungeonGenerator : MonoBehaviour
     {
         canSplit = false;
         yield return new WaitForSeconds(cutSpeed);
-        SplitRoom();
         canSplit = true;
     }
+    IEnumerator SplitSlowRoom()
+    {
+        for (int i = 0; i < doneRooms.Count; i++)
+        {
+            yield return new WaitForSeconds(cutSpeed);
+            for (int j = i + 1; j < doneRooms.Count; j++)
+            {
+                CheckSplits(i, j);
+            }
+        }
+    }
+    IEnumerator SplitsManualRoom()
+    {
+        while (true)
+        {
+            for (int i = 0; i < doneRooms.Count; i++)
+            {
+                if (Input.GetKey(KeyCode.Space))
+                {
+                    for (int j = i + 1; j < doneRooms.Count; j++)
+                    {
+                        CheckSplits(i, j);
+                    }
+                }
+                yield return null;
+            }
+            yield break;
+        }
+    }
 }
+[System.Serializable]
+public class Connections
+{
+    public RectInt door;
+    public RectInt roomOne;
+    public RectInt roomTwo;
+
+    public Connections(RectInt door, RectInt roomOne, RectInt roomTwo)
+    {
+        this.door = door;
+        this.roomOne = roomOne;
+        this.roomTwo = roomTwo;
+    }
+}
+
