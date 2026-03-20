@@ -81,10 +81,10 @@ public class DungeonGenerator : MonoBehaviour
     {
         int selectedRoomInt = Random.Range(0, toDoRooms.Count);
         selectedRoom = toDoRooms[selectedRoomInt];
-        if(selectedRoom.width > minSize * 2 && selectedRoom.height > minSize * 2)
+        if (selectedRoom.width > minSize * 2 && selectedRoom.height > minSize * 2)
         {
             widthSplit = Random.Range(0, 1f) > 0.5f;
-            if(widthSplit)
+            if (widthSplit)
             {
                 ReduceWidth();
             }
@@ -158,37 +158,37 @@ public class DungeonGenerator : MonoBehaviour
                 if (AlgorithmsUtils.Intersects(doneRooms[i], doneRooms[j]))
                 {
                     savedRoom = AlgorithmsUtils.Intersect(doneRooms[i], doneRooms[j]);
-                    if (savedRoom.width < minSize / 2 && savedRoom.height < minSize / 2)
-                    {
-                        Debug.LogWarning("Door found to be too small");
-                    }
-                    else if (savedRoom.width == 3 || savedRoom.height == 3)
+                    if (savedRoom.width == 3 || savedRoom.height == 3)
                     {
                         Debug.LogWarning("Door found to be in a too narrow area");
                     }
-                    else if (savedRoom.width > minSize / 2)
+                    else if (savedRoom.width > 2)
                     {
-                        while (savedRoom.width > minSize / 2)
+                        while (savedRoom.width > 2)
                         {
                             savedRoom.width--;
-                            savedRoom.width--;
-                            savedRoom.x++;
+                            if (savedRoom.width > 2)
+                            {
+                                savedRoom.width--;
+                                savedRoom.x++;
+                            }
                         }
                         doors.Add(savedRoom);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[i].x + doneRooms[i].width / 2f, 0, doneRooms[i].y + doneRooms[i].height / 2f), Color.red, float.PositiveInfinity);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[j].x + doneRooms[j].width / 2f, 0, doneRooms[j].y + doneRooms[j].height / 2f), Color.red, float.PositiveInfinity);
+                        GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
                     }
-                    else if (savedRoom.height > minSize / 2)
+                    else if (savedRoom.height > 2)
                     {
-                        while (savedRoom.height > minSize / 2)
+                        while (savedRoom.height > 2)
                         {
                             savedRoom.height--;
-                            savedRoom.height--;
-                            savedRoom.y++;
+                            if (savedRoom.height > 2)
+                            {
+                                savedRoom.height--;
+                                savedRoom.y++;
+                            }
                         }
                         doors.Add(savedRoom);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[i].x + doneRooms[i].width / 2f, 0, doneRooms[i].y + doneRooms[i].height / 2f), Color.red, float.PositiveInfinity);
-                        Debug.DrawLine(new(savedRoom.x + savedRoom.width / 2f, 0, savedRoom.y + savedRoom.height / 2f), new(doneRooms[j].x + doneRooms[j].width / 2f, 0, doneRooms[j].y + doneRooms[j].height / 2f), Color.red, float.PositiveInfinity);
+                        GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
                     }
                 }
             }
