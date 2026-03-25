@@ -6,7 +6,7 @@ public class Doors : MonoBehaviour
     {
         if (savedRoom.width == 3 || savedRoom.height == 3)
         {
-            Debug.LogWarning("Door found to be in a too narrow area");
+
         }
         else if (savedRoom.width > 2)
         {

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using NaughtyAttributes;
 using UnityEditor.MemoryProfiler;
 using UnityEngine;
@@ -10,18 +11,26 @@ public class DungeonGenerator : MonoBehaviour
     public List<RectInt> toDoRooms;
     public List<RectInt> doneRooms;
     public List<RectInt> doorsList;
+    public List<RectInt> checkedRooms;
     public List<Connections> connections = new();
     public int minSize = 7;
     public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
     public float cutSpeed = 0.1f;
+    [Range(0, 75)]
+    public float percentageToDelete;
+    public int removeAttempts = 5;
     public GameObject cube;
     private RectInt savedRoom;
+    private int removeAttemptAmount;
+    private float percentageDeleted;
+    private float initialRoomsAmount;
     private int sizeToRemove;
+    private RectInt selectedRemovalRoom;
     private bool widthSplit;
     private bool canSplit = true;
     private bool checkSplitDone = false;
-    private int currentCheckingRoom = 0;
+    private bool roomsDeleted = false;
     [Button("restart Generation")]
     private void RestartRoom()
     {
@@ -32,7 +41,6 @@ public class DungeonGenerator : MonoBehaviour
         connections.Clear();
         toDoRooms.Add(selectedRoom);
         checkSplitDone = false;
-        currentCheckingRoom = 0;
     }
     void Start()
     {
@@ -43,12 +51,14 @@ public class DungeonGenerator : MonoBehaviour
         switch (spawnType)
         {
             case SpawnType.automatic:
-                if (toDoRooms.Count > 0)
+                if (toDoRooms.Count > 0 && checkSplitDone == false)
                 {
                     SplitRoom();
                 }
                 else if (checkSplitDone == false)
                 {
+                    initialRoomsAmount = doneRooms.Count;
+                    doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
                     checkSplitDone = true;
                     for (int i = 0; i < doneRooms.Count; i++)
                     {
@@ -57,10 +67,39 @@ public class DungeonGenerator : MonoBehaviour
                             CheckSplits(i, j);
                         }
                     }
+                    Debug.Log($"amount of donerooms: {doneRooms.Count}");
+                    while (!roomsDeleted)
+                    {
+                        selectedRoom = doneRooms[0];
+                        doneRooms.Remove(selectedRoom);
+                        if (CheckRooms(doneRooms[Random.Range(0, doneRooms.Count)], true))
+                        {
+                            DeleteRoom();
+                            percentageDeleted += 1 / (initialRoomsAmount / 100);
+                            Debug.Log("Room can be deleted >w<");
+                        }
+                        else
+                        {
+                            removeAttemptAmount += 1;
+                            doneRooms.Add(selectedRoom);
+                            Debug.Log("Room cannot be deleted QwQ");
+                            if (removeAttemptAmount >= removeAttempts)
+                            {
+                                roomsDeleted = true;
+                                Debug.Log($"Did not reach percentage: {percentageDeleted}/{percentageToDelete}");
+                            }
+                        }
+                        if (percentageDeleted >= percentageToDelete)
+                        {
+                            Debug.Log($"Reached percentage: {percentageDeleted}/{percentageToDelete}");
+                            roomsDeleted = true;
+                        }
+                        // roomsDeleted = true;
+                    }
                 }
                 break;
             case SpawnType.manual:
-                if (toDoRooms.Count > 0)
+                if (toDoRooms.Count > 0 && checkSplitDone == false)
                 {
                     if (Input.GetKey(KeyCode.Space))
                     {
@@ -69,12 +108,13 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 else if (checkSplitDone == false)
                 {
+                    doneRooms.Sort((a, b) => (a.x + a.y).CompareTo(b.x + b.y));
                     checkSplitDone = true;
                     StartCoroutine(SplitsManualRoom());
                 }
                 break;
             case SpawnType.slow:
-                if (toDoRooms.Count > 0)
+                if (toDoRooms.Count > 0 && checkSplitDone == false)
                 {
                     if (canSplit)
                     {
@@ -84,11 +124,17 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 else if (checkSplitDone == false)
                 {
+                    doneRooms.Sort((a, b) => (a.x + a.y).CompareTo(b.x + b.y));
                     checkSplitDone = true;
                     StartCoroutine(SplitSlowRoom());
                 }
                 break;
         }
+        DrawDebug();
+    }
+
+    private void DrawDebug()
+    {
         foreach (RectInt room in toDoRooms)
         {
             AlgorithmsUtils.DebugRectInt(room, Color.red);
@@ -108,6 +154,7 @@ public class DungeonGenerator : MonoBehaviour
         }
         AlgorithmsUtils.DebugRectInt(selectedRoom, Color.blue);
     }
+
     private void SplitRoom()
     {
         int selectedRoomInt = Random.Range(0, toDoRooms.Count);
@@ -191,9 +238,68 @@ public class DungeonGenerator : MonoBehaviour
                 doorsList.Add(savedRoom);
                 //savedRoom, doneRooms[i], doneRooms[j]
                 connections.Add(new Connections(savedRoom, doneRooms[i], doneRooms[j]));
-                GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
+                // GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
             }
         }
+    }
+    private void DeleteRoom()
+    {
+        foreach (Connections connection in connections.ToList())
+        {
+            if (connection.roomOne == selectedRoom)
+            {
+                connections.Remove(connection);
+                doorsList.Remove(connection.door);
+            }
+            else if (connection.roomTwo == selectedRoom)
+            {
+                connections.Remove(connection);
+                doorsList.Remove(connection.door);
+            }
+        }
+    }
+    private bool CheckRooms(RectInt roomToCheck, bool firstRoom)
+    {
+        if (firstRoom)
+        {
+            checkedRooms.Add(selectedRoom);
+        }
+        foreach (Connections connection in connections)
+        {
+            if (connection.roomOne == roomToCheck && !checkedRooms.Contains(connection.roomTwo))
+            {
+                if (!toDoRooms.Contains(connection.roomTwo))
+                {
+                    toDoRooms.Add(connection.roomTwo);
+                }
+            }
+            else if (connection.roomTwo == roomToCheck && !checkedRooms.Contains(connection.roomOne))
+            {
+                if (!toDoRooms.Contains(connection.roomOne))
+                {
+                    toDoRooms.Add(connection.roomOne);
+                }
+            }
+        }
+        checkedRooms.Add(roomToCheck);
+        toDoRooms.Remove(roomToCheck);
+        if (checkedRooms.Count == doneRooms.Count + 1)
+        {
+            checkedRooms.Clear();
+            toDoRooms.Clear();
+            return true;
+        }
+        else if (toDoRooms.Count == 0)
+        {
+            checkedRooms.Clear();
+            toDoRooms.Clear();
+            return false;
+        }
+        if (!CheckRooms(toDoRooms[0], false))
+        {
+            return false;
+        }
+        return true;
     }
     IEnumerator Wait()
     {
