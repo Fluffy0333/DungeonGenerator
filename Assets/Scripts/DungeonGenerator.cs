@@ -64,6 +64,7 @@ public class DungeonGenerator : MonoBehaviour
     }
     void Update()
     {
+        //either go automatic, force the user to hold down space or go slow.
         switch (spawnType)
         {
             case SpawnType.automatic:
@@ -76,6 +77,7 @@ public class DungeonGenerator : MonoBehaviour
                     initialRoomsAmount = doneRooms.Count;
                     doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
                     checkSplitDone = true;
+                    //checks all connections O(n²)
                     for (int i = 0; i < doneRooms.Count; i++)
                     {
                         for (int j = i + 1; j < doneRooms.Count; j++)
@@ -108,6 +110,7 @@ public class DungeonGenerator : MonoBehaviour
                     }
                     if (!canCheck)
                     {
+                        //checks all connections if user holds space O(n²)
                         if (Input.GetKey(KeyCode.Space) && i < doneRooms.Count)
                         {
                             for (int j = i + 1; j < doneRooms.Count; j++)
@@ -165,7 +168,7 @@ public class DungeonGenerator : MonoBehaviour
         }
         DrawDebug();
     }
-
+    //check if room can be deleted -> if it can, increase percentage of deleted and return. if it cannot delete the room increase attempts used, if attempts/percentage reaches max then rooms won't be deleted anymore.
     private void CheckDeleteRoom()
     {
         selectedRoom = doneRooms[0];
@@ -174,13 +177,13 @@ public class DungeonGenerator : MonoBehaviour
         {
             DeleteRoom();
             percentageDeleted += 1 / (initialRoomsAmount / 100);
-            Debug.Log("Room can be deleted >w<");
+            Debug.Log("Room can be deleted");
         }
         else
         {
             removeAttemptAmount += 1;
             doneRooms.Add(selectedRoom);
-            Debug.Log("Room cannot be deleted QwQ");
+            Debug.Log("Room cannot be deleted");
             if (removeAttemptAmount >= removeAttempts)
             {
                 roomsDeleted = true;
@@ -196,7 +199,7 @@ public class DungeonGenerator : MonoBehaviour
             selectedRoom = doneRooms[0];
         }
     }
-
+    //shows all rooms/doors/connections/currentroom with debug.
     private void DrawDebug()
     {
         foreach (RectInt room in toDoRooms)
@@ -218,7 +221,7 @@ public class DungeonGenerator : MonoBehaviour
         }
         AlgorithmsUtils.DebugRectInt(selectedRoom, Color.blue);
     }
-
+    //reduces width or height from a room till it can't anymore without going under the minimum requirements. width/height is predictably randomly chosen.
     private void SplitRoom()
     {
         int selectedRoomInt = rand.Next(0, toDoRooms.Count);
@@ -245,6 +248,7 @@ public class DungeonGenerator : MonoBehaviour
         }
         else
         {
+            //doesn't trigger anymore but is gonna remain for failsafe.
             Debug.LogWarning("Done room found in not done list!");
             AddDoneRoom(selectedRoom);
             return;
@@ -291,6 +295,7 @@ public class DungeonGenerator : MonoBehaviour
         }
         selectedRoom.height = selectedRoom.height - sizeToRemove + 1;
     }
+    //check if a room connects to another room. O(n²)
     private void CheckSplits(int i, int j)
     {
         if (AlgorithmsUtils.Intersects(doneRooms[i], doneRooms[j]))
@@ -320,6 +325,7 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
     }
+    //checks every room to see if every room are connected to each other if we delete firstRoom, this is used to then delete the firstRoom if all still connect.
     private bool CheckRooms(RectInt roomToCheck, bool firstRoom)
     {
         if (firstRoom)
@@ -369,8 +375,10 @@ public class DungeonGenerator : MonoBehaviour
         yield return new WaitForSeconds(cutSpeed);
         canSplit = true;
     }
+    //used to make splits take longer.
     IEnumerator SplitSlowRoom()
     {
+        //checks all connections, slowly O(n²)
         for (int i = 0; i < doneRooms.Count; i++)
         {
             yield return new WaitForSeconds(cutSpeed);
