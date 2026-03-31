@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System;
 using NaughtyAttributes;
 using UnityEditor.MemoryProfiler;
 using UnityEngine;
@@ -20,13 +21,14 @@ public class DungeonGenerator : MonoBehaviour
     [Range(0, 75)]
     public float percentageToDelete;
     public int removeAttempts = 5;
+    public int seed;
     public GameObject cube;
+    private System.Random rand = new System.Random();
     private RectInt savedRoom;
     private int removeAttemptAmount;
     private float percentageDeleted;
     private float initialRoomsAmount;
     private int sizeToRemove;
-    private RectInt selectedRemovalRoom;
     private bool widthSplit;
     private bool canSplit = true;
     private bool checkSplitDone = false;
@@ -40,10 +42,18 @@ public class DungeonGenerator : MonoBehaviour
         doorsList.Clear();
         connections.Clear();
         toDoRooms.Add(selectedRoom);
+        removeAttemptAmount = 0;
+        percentageDeleted = 0;
+        initialRoomsAmount = 0;
         checkSplitDone = false;
+        roomsDeleted = false;
     }
     void Start()
     {
+        if (seed > 0)
+        {
+            rand = new System.Random(seed);
+        }
         toDoRooms.Add(selectedRoom);
     }
     void Update()
@@ -72,7 +82,7 @@ public class DungeonGenerator : MonoBehaviour
                     {
                         selectedRoom = doneRooms[0];
                         doneRooms.Remove(selectedRoom);
-                        if (CheckRooms(doneRooms[Random.Range(0, doneRooms.Count)], true))
+                        if (CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true))
                         {
                             DeleteRoom();
                             percentageDeleted += 1 / (initialRoomsAmount / 100);
@@ -157,11 +167,11 @@ public class DungeonGenerator : MonoBehaviour
 
     private void SplitRoom()
     {
-        int selectedRoomInt = Random.Range(0, toDoRooms.Count);
+        int selectedRoomInt = rand.Next(0, toDoRooms.Count);
         selectedRoom = toDoRooms[selectedRoomInt];
         if (selectedRoom.width > minSize * 2 && selectedRoom.height > minSize * 2)
         {
-            widthSplit = Random.Range(0, 1f) > 0.5f;
+            widthSplit = rand.Next(0, 100) > 50;
             if (widthSplit)
             {
                 ReduceWidth();
@@ -201,7 +211,7 @@ public class DungeonGenerator : MonoBehaviour
     }
     private void ReduceWidth()
     {
-        sizeToRemove = Random.Range(minSize, selectedRoom.width - minSize);
+        sizeToRemove = rand.Next(minSize, selectedRoom.width - minSize);
         savedRoom = new(selectedRoom.width - sizeToRemove + selectedRoom.xMin, selectedRoom.yMin, sizeToRemove, selectedRoom.height);
         if (savedRoom.width > minSize * 2 || savedRoom.height > minSize * 2)
         {
@@ -215,7 +225,7 @@ public class DungeonGenerator : MonoBehaviour
     }
     private void ReduceHeight()
     {
-        sizeToRemove = Random.Range(minSize, selectedRoom.height - minSize);
+        sizeToRemove = rand.Next(minSize, selectedRoom.height - minSize);
         savedRoom = new(selectedRoom.xMin, selectedRoom.height - sizeToRemove + selectedRoom.yMin, selectedRoom.width, sizeToRemove);
         if (savedRoom.width > minSize * 2 || savedRoom.height > minSize * 2)
         {
