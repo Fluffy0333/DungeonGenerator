@@ -427,9 +427,11 @@ MonoBehaviour:
   checkedRooms: []
   connections: []
   minSize: 7
-  spawnType: 0
+  spawnType: 2
   cutSpeed: 0.025
   percentageToDelete: 51.2
+  removeAttempts: 5
+  seed: 15
   cube: {fileID: 2589280522366959548, guid: 4e47f300729fa8845917d8fc6d2827ce, type: 3}
 --- !u!4 &1310489900
 Transform:

@@ -30,7 +30,10 @@ public class DungeonGenerator : MonoBehaviour
     private float initialRoomsAmount;
     private int sizeToRemove;
     private bool widthSplit;
+    private int i = 0;
     private bool canSplit = true;
+    private bool canCheckConnections = true;
+    private bool canCheck = false;
     private bool checkSplitDone = false;
     private bool roomsDeleted = false;
     [Button("restart Generation")]
@@ -47,6 +50,9 @@ public class DungeonGenerator : MonoBehaviour
         initialRoomsAmount = 0;
         checkSplitDone = false;
         roomsDeleted = false;
+        canSplit = true;
+        canCheckConnections = false;
+        canCheck = false;
     }
     void Start()
     {
@@ -77,34 +83,9 @@ public class DungeonGenerator : MonoBehaviour
                             CheckSplits(i, j);
                         }
                     }
-                    Debug.Log($"amount of donerooms: {doneRooms.Count}");
                     while (!roomsDeleted)
                     {
-                        selectedRoom = doneRooms[0];
-                        doneRooms.Remove(selectedRoom);
-                        if (CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true))
-                        {
-                            DeleteRoom();
-                            percentageDeleted += 1 / (initialRoomsAmount / 100);
-                            Debug.Log("Room can be deleted >w<");
-                        }
-                        else
-                        {
-                            removeAttemptAmount += 1;
-                            doneRooms.Add(selectedRoom);
-                            Debug.Log("Room cannot be deleted QwQ");
-                            if (removeAttemptAmount >= removeAttempts)
-                            {
-                                roomsDeleted = true;
-                                Debug.Log($"Did not reach percentage: {percentageDeleted}/{percentageToDelete}");
-                            }
-                        }
-                        if (percentageDeleted >= percentageToDelete)
-                        {
-                            Debug.Log($"Reached percentage: {percentageDeleted}/{percentageToDelete}");
-                            roomsDeleted = true;
-                        }
-                        // roomsDeleted = true;
+                        CheckDeleteRoom();
                     }
                 }
                 break;
@@ -118,9 +99,36 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 else if (checkSplitDone == false)
                 {
-                    doneRooms.Sort((a, b) => (a.x + a.y).CompareTo(b.x + b.y));
-                    checkSplitDone = true;
-                    StartCoroutine(SplitsManualRoom());
+                    if (canCheckConnections)
+                    {
+                        initialRoomsAmount = doneRooms.Count;
+                        doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
+                        Debug.Log("sorted rooms");
+                        canCheckConnections = false;
+                    }
+                    if (!canCheck)
+                    {
+                        if (Input.GetKey(KeyCode.Space) && i < doneRooms.Count)
+                        {
+                            for (int j = i + 1; j < doneRooms.Count; j++)
+                            {
+                                CheckSplits(i, j);
+                            }
+                            i++;
+                        }
+                        else if (i >= doneRooms.Count)
+                        {
+                            Debug.Log("done checking connections");
+                            canCheck = true;
+                        }
+                    }
+                    else
+                    {
+                        if (Input.GetKey(KeyCode.Space))
+                        {
+                            CheckDeleteRoom();
+                        }
+                    }
                 }
                 break;
             case SpawnType.slow:
@@ -134,13 +142,59 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 else if (checkSplitDone == false)
                 {
-                    doneRooms.Sort((a, b) => (a.x + a.y).CompareTo(b.x + b.y));
-                    checkSplitDone = true;
-                    StartCoroutine(SplitSlowRoom());
+                    if (!canCheck)
+                    {
+                        if (canCheckConnections)
+                        {
+                            initialRoomsAmount = doneRooms.Count;
+                            doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
+                            StartCoroutine(SplitSlowRoom());
+                            canCheckConnections = false;
+                        }
+                    }
+                    else
+                    {
+                        if (canSplit)
+                        {
+                            StartCoroutine(Wait());
+                            CheckDeleteRoom();
+                        }
+                    }
                 }
                 break;
         }
         DrawDebug();
+    }
+
+    private void CheckDeleteRoom()
+    {
+        selectedRoom = doneRooms[0];
+        doneRooms.Remove(selectedRoom);
+        if (CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true))
+        {
+            DeleteRoom();
+            percentageDeleted += 1 / (initialRoomsAmount / 100);
+            Debug.Log("Room can be deleted >w<");
+        }
+        else
+        {
+            removeAttemptAmount += 1;
+            doneRooms.Add(selectedRoom);
+            Debug.Log("Room cannot be deleted QwQ");
+            if (removeAttemptAmount >= removeAttempts)
+            {
+                roomsDeleted = true;
+                Debug.Log($"Did not reach percentage: {percentageDeleted}/{percentageToDelete}");
+                checkSplitDone = true;
+            }
+        }
+        if (percentageDeleted >= percentageToDelete)
+        {
+            Debug.Log($"Reached percentage: {percentageDeleted}/{percentageToDelete}");
+            roomsDeleted = true;
+            checkSplitDone = true;
+            selectedRoom = doneRooms[0];
+        }
     }
 
     private void DrawDebug()
@@ -246,9 +300,7 @@ public class DungeonGenerator : MonoBehaviour
             if (savedRoom != RectInt.zero)
             {
                 doorsList.Add(savedRoom);
-                //savedRoom, doneRooms[i], doneRooms[j]
                 connections.Add(new Connections(savedRoom, doneRooms[i], doneRooms[j]));
-                // GraphMaker.DrawGraph(savedRoom, doneRooms, i, j);
             }
         }
     }
@@ -327,24 +379,7 @@ public class DungeonGenerator : MonoBehaviour
                 CheckSplits(i, j);
             }
         }
-    }
-    IEnumerator SplitsManualRoom()
-    {
-        while (true)
-        {
-            for (int i = 0; i < doneRooms.Count; i++)
-            {
-                if (Input.GetKey(KeyCode.Space))
-                {
-                    for (int j = i + 1; j < doneRooms.Count; j++)
-                    {
-                        CheckSplits(i, j);
-                    }
-                }
-                yield return null;
-            }
-            yield break;
-        }
+        canCheck = true;
     }
 }
 [System.Serializable]
