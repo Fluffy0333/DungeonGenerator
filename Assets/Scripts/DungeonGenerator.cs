@@ -51,8 +51,12 @@ public class DungeonGenerator : MonoBehaviour
         checkSplitDone = false;
         roomsDeleted = false;
         canSplit = true;
-        canCheckConnections = false;
+        canCheckConnections = true;
         canCheck = false;
+        if (seed > 0)
+        {
+            rand = new System.Random(seed);
+        }
     }
     void Start()
     {

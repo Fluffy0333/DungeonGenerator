@@ -427,7 +427,7 @@ MonoBehaviour:
   checkedRooms: []
   connections: []
   minSize: 7
-  spawnType: 0
+  spawnType: 2
   cutSpeed: 0.025
   percentageToDelete: 51.2
   removeAttempts: 5
