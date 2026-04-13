@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using NaughtyAttributes;
-using UnityEditor.MemoryProfiler;
 using UnityEngine;
+using Unity.AI.Navigation;
 
+[RequireComponent(typeof(DeleteRooms))]
 public class DungeonGenerator : MonoBehaviour
 {
     public RectInt selectedRoom = new(0, 0, 100, 150);
@@ -14,6 +15,8 @@ public class DungeonGenerator : MonoBehaviour
     public List<RectInt> doorsList;
     public List<RectInt> checkedRooms;
     public List<Connections> connections = new();
+    public GameObject floor;
+    public GameObject wall;
     public int minSize = 7;
     public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
@@ -23,9 +26,11 @@ public class DungeonGenerator : MonoBehaviour
     public int removeAttempts = 5;
     public int seed;
     public GameObject cube;
+    public NavMeshSurface navMeshSurface;
     private System.Random rand = new System.Random();
     private RectInt savedRoom;
-    private int removeAttemptAmount;
+    [HideInInspector]
+    public int removeAttemptAmount;
     private float percentageDeleted;
     private float initialRoomsAmount;
     private int sizeToRemove;
@@ -36,6 +41,9 @@ public class DungeonGenerator : MonoBehaviour
     private bool canCheck = false;
     private bool checkSplitDone = false;
     private bool roomsDeleted = false;
+    private HashSet<Vector2> wallList = new();
+    private HashSet<Vector2> doorList = new();
+    DeleteRooms deleteRooms;
     [Button("restart Generation")]
     private void RestartRoom()
     {
@@ -60,6 +68,7 @@ public class DungeonGenerator : MonoBehaviour
     }
     void Start()
     {
+        deleteRooms = GetComponent<DeleteRooms>();
         if (seed > 0)
         {
             rand = new System.Random(seed);
@@ -82,8 +91,9 @@ public class DungeonGenerator : MonoBehaviour
                     doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
                     checkSplitDone = true;
                     //checks all connections O(n²)
-                    for (int i = 0; i < doneRooms.Count; i++)
+                    for (i = 0; i < doneRooms.Count; i++)
                     {
+                        selectedRoom = doneRooms[i];
                         for (int j = i + 1; j < doneRooms.Count; j++)
                         {
                             CheckSplits(i, j);
@@ -91,8 +101,26 @@ public class DungeonGenerator : MonoBehaviour
                     }
                     while (!roomsDeleted)
                     {
-                        CheckDeleteRoom();
+                        roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
+                        checkSplitDone = roomsDeleted;
                     }
+                    i = 0;
+                    foreach (RectInt door in doorsList)
+                    {
+                        doorList.Add(new(door.x + 0.5f, door.y + 0.5f));
+                        doorList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
+                        wallList.Add(new(door.x + 0.5f, door.y + 0.5f));
+                        wallList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
+                    }
+                    foreach (RectInt room in doneRooms)
+                    {
+                        GameObject parentGameObject = new($"room{i}");
+                        i++;
+                        AddWalls(room, parentGameObject);
+                        AddFloors(room, parentGameObject);
+                    }
+                    AddFloorDoors(doorList, new("Doors"));
+                    BakeNavMesh();
                 }
                 break;
             case SpawnType.manual:
@@ -117,6 +145,7 @@ public class DungeonGenerator : MonoBehaviour
                         //checks all connections if user holds space O(n²)
                         if (Input.GetKey(KeyCode.Space) && i < doneRooms.Count)
                         {
+                            selectedRoom = doneRooms[i];
                             for (int j = i + 1; j < doneRooms.Count; j++)
                             {
                                 CheckSplits(i, j);
@@ -133,7 +162,8 @@ public class DungeonGenerator : MonoBehaviour
                     {
                         if (Input.GetKey(KeyCode.Space))
                         {
-                            CheckDeleteRoom();
+                            roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
+                            checkSplitDone = roomsDeleted;
                         }
                     }
                 }
@@ -164,44 +194,14 @@ public class DungeonGenerator : MonoBehaviour
                         if (canSplit)
                         {
                             StartCoroutine(Wait());
-                            CheckDeleteRoom();
+                            roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
+                            checkSplitDone = roomsDeleted;
                         }
                     }
                 }
                 break;
         }
         DrawDebug();
-    }
-    //check if room can be deleted -> if it can, increase percentage of deleted and return. if it cannot delete the room increase attempts used, if attempts/percentage reaches max then rooms won't be deleted anymore.
-    private void CheckDeleteRoom()
-    {
-        selectedRoom = doneRooms[0];
-        doneRooms.Remove(selectedRoom);
-        if (CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true))
-        {
-            DeleteRoom();
-            percentageDeleted += 1 / (initialRoomsAmount / 100);
-            Debug.Log("Room can be deleted");
-        }
-        else
-        {
-            removeAttemptAmount += 1;
-            doneRooms.Add(selectedRoom);
-            Debug.Log("Room cannot be deleted");
-            if (removeAttemptAmount >= removeAttempts)
-            {
-                roomsDeleted = true;
-                Debug.Log($"Did not reach percentage: {percentageDeleted}/{percentageToDelete}");
-                checkSplitDone = true;
-            }
-        }
-        if (percentageDeleted >= percentageToDelete)
-        {
-            Debug.Log($"Reached percentage: {percentageDeleted}/{percentageToDelete}");
-            roomsDeleted = true;
-            checkSplitDone = true;
-            selectedRoom = doneRooms[0];
-        }
     }
     //shows all rooms/doors/connections/currentroom with debug.
     private void DrawDebug()
@@ -313,24 +313,8 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
     }
-    private void DeleteRoom()
-    {
-        foreach (Connections connection in connections.ToList())
-        {
-            if (connection.roomOne == selectedRoom)
-            {
-                connections.Remove(connection);
-                doorsList.Remove(connection.door);
-            }
-            else if (connection.roomTwo == selectedRoom)
-            {
-                connections.Remove(connection);
-                doorsList.Remove(connection.door);
-            }
-        }
-    }
     //checks every room to see if every room are connected to each other if we delete firstRoom, this is used to then delete the firstRoom if all still connect.
-    private bool CheckRooms(RectInt roomToCheck, bool firstRoom)
+    public bool CheckRooms(RectInt roomToCheck, bool firstRoom)
     {
         if (firstRoom)
         {
@@ -383,8 +367,9 @@ public class DungeonGenerator : MonoBehaviour
     IEnumerator SplitSlowRoom()
     {
         //checks all connections, slowly O(n²)
-        for (int i = 0; i < doneRooms.Count; i++)
+        for (i = 0; i < doneRooms.Count; i++)
         {
+            selectedRoom = doneRooms[i];
             yield return new WaitForSeconds(cutSpeed);
             for (int j = i + 1; j < doneRooms.Count; j++)
             {
@@ -392,6 +377,61 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
         canCheck = true;
+    }
+    private void AddWalls(RectInt room, GameObject parentGameObject)
+    {
+        for (int width = 0; width < room.width; width++)
+        {
+            if (!wallList.Contains(new(room.x + width + 0.5f, room.y + 0.5f)))
+            {
+                wallList.Add(new(room.x + width + 0.5f, room.y + 0.5f));
+                Instantiate(wall, new(room.x + width + 0.5f, 0.5f, room.y + 0.5f), transform.rotation, parentGameObject.transform);
+            }
+            if (!wallList.Contains(new(room.x + width + 0.5f, room.y + room.height - 0.5f)))
+            {
+                wallList.Add(new(room.x + width + 0.5f, room.y + room.height - 0.5f));
+                Instantiate(wall, new(room.x + width + 0.5f, 0.5f, room.y + room.height - 0.5f), transform.rotation, parentGameObject.transform);
+            }
+        }
+        for (int height = 0; height < room.height; height++)
+        {
+            if (!wallList.Contains(new(room.x + 0.5f, room.y + height + 0.5f)))
+            {
+                wallList.Add(new(room.x + 0.5f, room.y + height + 0.5f));
+                Instantiate(wall, new(room.x + 0.5f, 0.5f, room.y + height + 0.5f), transform.rotation, parentGameObject.transform);
+            }
+            if (!wallList.Contains(new(room.x + room.width - 0.5f, room.y + height + 0.5f)))
+            {
+                wallList.Add(new(room.x + room.width - 0.5f, room.y + height + 0.5f));
+                Instantiate(wall, new(room.x + room.width - 0.5f, 0.5f, room.y + height + 0.5f), transform.rotation, parentGameObject.transform);
+            }
+        }
+    }
+    private void AddFloors(RectInt room, GameObject parentGameObject)
+    {
+        for (int width = 0; width < room.width; width++)
+        {
+            // Debug.Log(room.allPositionsWithin);
+            for (int height = 0; height < room.height; height++)
+            {
+                if (!wallList.Contains(new(room.x + width + 0.5f, room.y + height + 0.5f)))
+                {
+                    Instantiate(floor, new(width + 0.5f + room.x, 0, height + 0.5f + room.y), new(1, 0, 0, 1), parentGameObject.transform);
+                }
+            }
+        }
+    }
+    private void AddFloorDoors(HashSet<Vector2> doors, GameObject parentGameObject)
+    {
+        foreach (Vector2 door in doorList)
+        {
+            Instantiate(floor, new(door.x, 0, door.y), new(1, 0, 0, 1), parentGameObject.transform);
+        }
+    }
+    [Button]
+    private void BakeNavMesh()
+    {
+        navMeshSurface.BuildNavMesh();
     }
 }
 [System.Serializable]
