@@ -5,8 +5,10 @@ using System;
 using NaughtyAttributes;
 using UnityEngine;
 using Unity.AI.Navigation;
+using System.IO;
 
 [RequireComponent(typeof(DeleteRooms))]
+[RequireComponent(typeof(MarchingSquare))]
 public class DungeonGenerator : MonoBehaviour
 {
     public RectInt selectedRoom = new(0, 0, 100, 150);
@@ -16,7 +18,6 @@ public class DungeonGenerator : MonoBehaviour
     public List<RectInt> checkedRooms;
     public List<Connections> connections = new();
     public GameObject floor;
-    public GameObject wall;
     public int minSize = 7;
     public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
@@ -25,10 +26,9 @@ public class DungeonGenerator : MonoBehaviour
     public float percentageToDelete;
     public int removeAttempts = 5;
     public int seed;
-    public GameObject cube;
-    public NavMeshSurface navMeshSurface;
-    private System.Random rand = new System.Random();
+    private System.Random rand = new();
     private RectInt savedRoom;
+    private RectInt dungeonBounds;
     [HideInInspector]
     public int removeAttemptAmount;
     private float percentageDeleted;
@@ -36,18 +36,22 @@ public class DungeonGenerator : MonoBehaviour
     private int sizeToRemove;
     private bool widthSplit;
     private int i = 0;
-    private bool canSplit = true;
-    private bool canCheckConnections = true;
     private bool canCheck = false;
     private bool checkSplitDone = false;
     private bool roomsDeleted = false;
-    private HashSet<Vector2> wallList = new();
+    private GameObject roomParent;
+    private bool waitForInput = false;
+    private bool goSlow = false;
+    [HideInInspector]
+    public HashSet<Vector2> wallList = new();
     private HashSet<Vector2> doorList = new();
-    DeleteRooms deleteRooms;
+    public DeleteRooms deleteRooms;
+    MarchingSquare marchingSquare;
     [Button("restart Generation")]
     private void RestartRoom()
     {
-        selectedRoom = new(0, 0, 100, 150);
+        selectedRoom = dungeonBounds;
+        marchingSquare.dungeonBounds = dungeonBounds;
         doneRooms.Clear();
         toDoRooms.Clear();
         doorsList.Clear();
@@ -58,9 +62,9 @@ public class DungeonGenerator : MonoBehaviour
         initialRoomsAmount = 0;
         checkSplitDone = false;
         roomsDeleted = false;
-        canSplit = true;
-        canCheckConnections = true;
         canCheck = false;
+        marchingSquare.enabled = false;
+        StartCoroutine(BeginCutting());
         if (seed > 0)
         {
             rand = new System.Random(seed);
@@ -68,141 +72,138 @@ public class DungeonGenerator : MonoBehaviour
     }
     void Start()
     {
+        roomParent = new("rooms");
+        dungeonBounds = selectedRoom;
         deleteRooms = GetComponent<DeleteRooms>();
+        marchingSquare = GetComponent<MarchingSquare>();
+        marchingSquare.dungeonBounds = dungeonBounds;
         if (seed > 0)
         {
             rand = new System.Random(seed);
         }
         toDoRooms.Add(selectedRoom);
+        CheckSpawnType();
+        StartCoroutine(BeginCutting());
     }
     void Update()
     {
-        //either go automatic, force the user to hold down space or go slow.
+        DrawDebug();
+        CheckSpawnType();
+    }
+    public void CheckSpawnType()
+    {
         switch (spawnType)
         {
             case SpawnType.automatic:
-                if (toDoRooms.Count > 0 && checkSplitDone == false)
+                waitForInput = false;
+                goSlow = false;
+                if (checkSplitDone == true)
                 {
-                    SplitRoom();
-                }
-                else if (checkSplitDone == false)
-                {
-                    initialRoomsAmount = doneRooms.Count;
-                    doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
-                    checkSplitDone = true;
-                    //checks all connections O(n²)
-                    for (i = 0; i < doneRooms.Count; i++)
-                    {
-                        selectedRoom = doneRooms[i];
-                        for (int j = i + 1; j < doneRooms.Count; j++)
-                        {
-                            CheckSplits(i, j);
-                        }
-                    }
-                    while (!roomsDeleted)
-                    {
-                        roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
-                        checkSplitDone = roomsDeleted;
-                    }
-                    i = 0;
-                    foreach (RectInt door in doorsList)
-                    {
-                        doorList.Add(new(door.x + 0.5f, door.y + 0.5f));
-                        doorList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
-                        wallList.Add(new(door.x + 0.5f, door.y + 0.5f));
-                        wallList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
-                    }
-                    foreach (RectInt room in doneRooms)
-                    {
-                        GameObject parentGameObject = new($"room{i}");
-                        i++;
-                        AddWalls(room, parentGameObject);
-                        AddFloors(room, parentGameObject);
-                    }
-                    AddFloorDoors(doorList, new("Doors"));
-                    BakeNavMesh();
+                    marchingSquare.delay = 0;
+                    marchingSquare.waitForInput = false;
                 }
                 break;
             case SpawnType.manual:
-                if (toDoRooms.Count > 0 && checkSplitDone == false)
+                waitForInput = true;
+                goSlow = false;
+                if (checkSplitDone == true)
                 {
-                    if (Input.GetKey(KeyCode.Space))
-                    {
-                        SplitRoom();
-                    }
-                }
-                else if (checkSplitDone == false)
-                {
-                    if (canCheckConnections)
-                    {
-                        initialRoomsAmount = doneRooms.Count;
-                        doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
-                        Debug.Log("sorted rooms");
-                        canCheckConnections = false;
-                    }
-                    if (!canCheck)
-                    {
-                        //checks all connections if user holds space O(n²)
-                        if (Input.GetKey(KeyCode.Space) && i < doneRooms.Count)
-                        {
-                            selectedRoom = doneRooms[i];
-                            for (int j = i + 1; j < doneRooms.Count; j++)
-                            {
-                                CheckSplits(i, j);
-                            }
-                            i++;
-                        }
-                        else if (i >= doneRooms.Count)
-                        {
-                            Debug.Log("done checking connections");
-                            canCheck = true;
-                        }
-                    }
-                    else
-                    {
-                        if (Input.GetKey(KeyCode.Space))
-                        {
-                            roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
-                            checkSplitDone = roomsDeleted;
-                        }
-                    }
+                    marchingSquare.delay = 0;
+                    marchingSquare.waitForInput = true;
                 }
                 break;
             case SpawnType.slow:
-                if (toDoRooms.Count > 0 && checkSplitDone == false)
+                goSlow = true;
+                waitForInput = false;
+                if (checkSplitDone == true)
                 {
-                    if (canSplit)
-                    {
-                        StartCoroutine(Wait());
-                        SplitRoom();
-                    }
-                }
-                else if (checkSplitDone == false)
-                {
-                    if (!canCheck)
-                    {
-                        if (canCheckConnections)
-                        {
-                            initialRoomsAmount = doneRooms.Count;
-                            doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
-                            StartCoroutine(SplitSlowRoom());
-                            canCheckConnections = false;
-                        }
-                    }
-                    else
-                    {
-                        if (canSplit)
-                        {
-                            StartCoroutine(Wait());
-                            roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
-                            checkSplitDone = roomsDeleted;
-                        }
-                    }
+                    marchingSquare.delay = cutSpeed;
+                    marchingSquare.waitForInput = false;
                 }
                 break;
         }
-        DrawDebug();
     }
+    IEnumerator BeginCutting()
+    {
+        yield return new WaitForSeconds(0.1f);
+        while (marchingSquare.enabled == false)
+        {
+            if (goSlow)
+            {
+                yield return new WaitForSeconds(cutSpeed);
+            }
+            else if (waitForInput)
+            {
+                Debug.Log("waiting for input");
+                yield return new WaitUntil(() => Input.GetKey(KeyCode.Space));
+            }
+            if (toDoRooms.Count > 0 && checkSplitDone == false)
+            {
+                SplitRoom();
+            }
+            else if (initialRoomsAmount == 0)
+            {
+                initialRoomsAmount = doneRooms.Count;
+                doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
+            }
+            else if (canCheck == false)
+            {
+                if (i < doneRooms.Count)
+                {
+                    selectedRoom = doneRooms[i];
+                    for (int j = i + 1; j < doneRooms.Count; j++)
+                    {
+                        CheckSplits(i, j);
+                    }
+                    i++;
+                }
+                else if (i >= doneRooms.Count)
+                {
+                    Debug.Log("done checking connections");
+                    canCheck = true;
+                }
+            }
+            else if (checkSplitDone == false)
+            {
+                if (!roomsDeleted)
+                {
+                    roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
+                    checkSplitDone = roomsDeleted;
+                }
+            }
+            else if (checkSplitDone == true)
+            {
+                foreach (RectInt door in doorsList)
+                {
+                    WallDoorList(door);
+                }
+                foreach (RectInt room in doneRooms)
+                {
+                    CreateRoomStructure(room);
+                }
+                AddFloorDoors(doorList, new("Doors"));
+                marchingSquare.enabled = true;
+            }
+        }
+    }
+
+    private void CreateRoomStructure(RectInt room)
+    {
+        GameObject parentGameObject = new($"room{i}");
+        Instantiate(parentGameObject, transform.position, transform.rotation, roomParent.transform);
+        i++;
+        AddWalls(room);
+        AddFloors(room, parentGameObject);
+    }
+
+    private void WallDoorList(RectInt door)
+    {
+        doorList.Add(new(door.x + 0.5f, door.y + 0.5f));
+        doorList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
+        wallList.Add(new(door.x + 0.5f, door.y + 0.5f));
+        wallList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
+    }
+
     //shows all rooms/doors/connections/currentroom with debug.
     private void DrawDebug()
     {
@@ -267,9 +268,6 @@ public class DungeonGenerator : MonoBehaviour
     {
         doneRooms.Add(roomSelected);
         toDoRooms.Remove(roomSelected);
-        //add for debugging with cubes
-        // GameObject spawnedCube = Instantiate(cube, new(roomSelected.x + roomSelected.width / 2, transform.position.y, roomSelected.y + roomSelected.height / 2), Quaternion.identity);
-        // spawnedCube.name = $"cube({doneRooms.Count - 1})";
     }
     private void ReduceWidth()
     {
@@ -357,40 +355,17 @@ public class DungeonGenerator : MonoBehaviour
         }
         return true;
     }
-    IEnumerator Wait()
-    {
-        canSplit = false;
-        yield return new WaitForSeconds(cutSpeed);
-        canSplit = true;
-    }
-    //used to make splits take longer.
-    IEnumerator SplitSlowRoom()
-    {
-        //checks all connections, slowly O(n²)
-        for (i = 0; i < doneRooms.Count; i++)
-        {
-            selectedRoom = doneRooms[i];
-            yield return new WaitForSeconds(cutSpeed);
-            for (int j = i + 1; j < doneRooms.Count; j++)
-            {
-                CheckSplits(i, j);
-            }
-        }
-        canCheck = true;
-    }
-    private void AddWalls(RectInt room, GameObject parentGameObject)
+    private void AddWalls(RectInt room)
     {
         for (int width = 0; width < room.width; width++)
         {
             if (!wallList.Contains(new(room.x + width + 0.5f, room.y + 0.5f)))
             {
                 wallList.Add(new(room.x + width + 0.5f, room.y + 0.5f));
-                Instantiate(wall, new(room.x + width + 0.5f, 0.5f, room.y + 0.5f), transform.rotation, parentGameObject.transform);
             }
             if (!wallList.Contains(new(room.x + width + 0.5f, room.y + room.height - 0.5f)))
             {
                 wallList.Add(new(room.x + width + 0.5f, room.y + room.height - 0.5f));
-                Instantiate(wall, new(room.x + width + 0.5f, 0.5f, room.y + room.height - 0.5f), transform.rotation, parentGameObject.transform);
             }
         }
         for (int height = 0; height < room.height; height++)
@@ -398,12 +373,10 @@ public class DungeonGenerator : MonoBehaviour
             if (!wallList.Contains(new(room.x + 0.5f, room.y + height + 0.5f)))
             {
                 wallList.Add(new(room.x + 0.5f, room.y + height + 0.5f));
-                Instantiate(wall, new(room.x + 0.5f, 0.5f, room.y + height + 0.5f), transform.rotation, parentGameObject.transform);
             }
             if (!wallList.Contains(new(room.x + room.width - 0.5f, room.y + height + 0.5f)))
             {
                 wallList.Add(new(room.x + room.width - 0.5f, room.y + height + 0.5f));
-                Instantiate(wall, new(room.x + room.width - 0.5f, 0.5f, room.y + height + 0.5f), transform.rotation, parentGameObject.transform);
             }
         }
     }
@@ -426,12 +399,8 @@ public class DungeonGenerator : MonoBehaviour
         foreach (Vector2 door in doorList)
         {
             Instantiate(floor, new(door.x, 0, door.y), new(1, 0, 0, 1), parentGameObject.transform);
+            wallList.Remove(door);
         }
-    }
-    [Button]
-    private void BakeNavMesh()
-    {
-        navMeshSurface.BuildNavMesh();
     }
 }
 [System.Serializable]

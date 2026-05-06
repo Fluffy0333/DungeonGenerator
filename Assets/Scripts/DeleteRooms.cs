@@ -5,7 +5,7 @@ using UnityEngine;
 [RequireComponent(typeof(DungeonGenerator))]
 public class DeleteRooms : MonoBehaviour
 {
-    DungeonGenerator dungeonGenerator;
+    private DungeonGenerator dungeonGenerator;
     void Start()
     {
         dungeonGenerator = GetComponent<DungeonGenerator>();
