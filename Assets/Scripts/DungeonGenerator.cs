@@ -39,7 +39,8 @@ public class DungeonGenerator : MonoBehaviour
     private bool canCheck = false;
     private bool checkSplitDone = false;
     private bool roomsDeleted = false;
-    private GameObject roomParent;
+    [HideInInspector]
+    public GameObject roomParent;
     private bool waitForInput = false;
     private bool goSlow = false;
     [HideInInspector]
@@ -56,6 +57,8 @@ public class DungeonGenerator : MonoBehaviour
         toDoRooms.Clear();
         doorsList.Clear();
         connections.Clear();
+        Destroy(roomParent);
+        roomParent = new("rooms");
         toDoRooms.Add(selectedRoom);
         removeAttemptAmount = 0;
         percentageDeleted = 0;
@@ -63,6 +66,7 @@ public class DungeonGenerator : MonoBehaviour
         checkSplitDone = false;
         roomsDeleted = false;
         canCheck = false;
+        marchingSquare.currentLocation = new(1, 1);
         marchingSquare.enabled = false;
         StartCoroutine(BeginCutting());
         if (seed > 0)
@@ -161,6 +165,7 @@ public class DungeonGenerator : MonoBehaviour
                 {
                     Debug.Log("done checking connections");
                     canCheck = true;
+                    i = 1;
                 }
             }
             else if (checkSplitDone == false)
@@ -181,7 +186,7 @@ public class DungeonGenerator : MonoBehaviour
                 {
                     CreateRoomStructure(room);
                 }
-                AddFloorDoors(doorList, new("Doors"));
+                AddFloorDoors(doorList, roomParent);
                 marchingSquare.enabled = true;
             }
         }
@@ -189,8 +194,9 @@ public class DungeonGenerator : MonoBehaviour
 
     private void CreateRoomStructure(RectInt room)
     {
-        GameObject parentGameObject = new($"room{i}");
-        Instantiate(parentGameObject, transform.position, transform.rotation, roomParent.transform);
+        var tempRoom = new GameObject($"room{i}");
+        GameObject parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, roomParent.transform);
+        Destroy(tempRoom);
         i++;
         AddWalls(room);
         AddFloors(room, parentGameObject);

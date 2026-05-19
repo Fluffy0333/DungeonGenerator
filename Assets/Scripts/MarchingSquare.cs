@@ -25,10 +25,13 @@ public class MarchingSquare : MonoBehaviour
     public GameObject[] walls;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
+    void OnEnable()
     {
-        parentGameObject = new($"walls");
         dungeonGenerator = GetComponent<DungeonGenerator>();
+        var tempRoom = new GameObject($"walls");
+        parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, dungeonGenerator.roomParent.transform);
+        Destroy(tempRoom);
+        placeWalls = false;
     }
     void Update()
     {
@@ -50,7 +53,7 @@ public class MarchingSquare : MonoBehaviour
                 {
                     yield return new WaitForSeconds(delay);
                 }
-                else if(waitForInput)
+                else if (waitForInput)
                 {
                     WaitUntil wait = new(() => Input.GetKeyDown(KeyCode.Space));
                 }
