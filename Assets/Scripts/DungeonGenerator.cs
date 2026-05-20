@@ -31,7 +31,8 @@ public class DungeonGenerator : MonoBehaviour
     private RectInt dungeonBounds;
     [HideInInspector]
     public int removeAttemptAmount;
-    private float percentageDeleted;
+    [HideInInspector]
+    public float percentageDeleted;
     private float initialRoomsAmount;
     private int sizeToRemove;
     private bool widthSplit;
@@ -68,6 +69,7 @@ public class DungeonGenerator : MonoBehaviour
         canCheck = false;
         marchingSquare.currentLocation = new(1, 1);
         marchingSquare.enabled = false;
+        i = 0;
         StartCoroutine(BeginCutting());
         if (seed > 0)
         {
@@ -163,7 +165,6 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 else if (i >= doneRooms.Count)
                 {
-                    Debug.Log("done checking connections");
                     canCheck = true;
                     i = 1;
                 }
