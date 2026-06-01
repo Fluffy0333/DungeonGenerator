@@ -523,14 +523,17 @@ MonoBehaviour:
   connections: []
   floor: {fileID: 7653951064520607939, guid: 2fcf3e648f13675499b1999fcac8cfa7, type: 3}
   minSize: 7
-  spawnType: 0
+  spawnType: 2
   cutSpeed: 0.025
   percentageToDelete: 51.2
   removeAttempts: 5
   seed: 15
   removeAttemptAmount: 0
+  percentageDeleted: 0
   roomParent: {fileID: 0}
   deleteRooms: {fileID: 1310489901}
+  discovered: []
+  toDoFloors: []
 --- !u!4 &1310489900
 Transform:
   m_ObjectHideFlags: 0

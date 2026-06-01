@@ -20,13 +20,11 @@ public class DeleteRooms : MonoBehaviour
             DeleteRoom(dungeonGenerator.selectedRoom);
             percentageDeleted += 1 / (initialRoomsAmount / 100);
             dungeonGenerator.percentageDeleted = percentageDeleted;
-            Debug.Log("Room can be deleted");
         }
         else
         {
             dungeonGenerator.removeAttemptAmount += 1;
             doneRooms.Add(dungeonGenerator.selectedRoom);
-            Debug.Log("Room cannot be deleted");
             if (dungeonGenerator.removeAttemptAmount >= removeAttempts)
             {
                 Debug.Log($"Did not reach percentage: {percentageDeleted}/{percentageToDelete}");

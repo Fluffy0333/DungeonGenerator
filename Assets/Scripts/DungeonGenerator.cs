@@ -48,6 +48,8 @@ public class DungeonGenerator : MonoBehaviour
     public HashSet<Vector2> wallList = new();
     private HashSet<Vector2> doorList = new();
     public DeleteRooms deleteRooms;
+    private List<Vector3> discovered = new();
+    private List<Vector3> toDoFloors = new();
     MarchingSquare marchingSquare;
     [Button("restart Generation")]
     private void RestartRoom()
@@ -119,8 +121,8 @@ public class DungeonGenerator : MonoBehaviour
                 }
                 break;
             case SpawnType.slow:
-                goSlow = true;
                 waitForInput = false;
+                goSlow = true;
                 if (checkSplitDone == true)
                 {
                     marchingSquare.delay = cutSpeed;
@@ -140,7 +142,6 @@ public class DungeonGenerator : MonoBehaviour
             }
             else if (waitForInput)
             {
-                Debug.Log("waiting for input");
                 yield return new WaitUntil(() => Input.GetKey(KeyCode.Space));
             }
             if (toDoRooms.Count > 0 && checkSplitDone == false)
@@ -187,6 +188,16 @@ public class DungeonGenerator : MonoBehaviour
                 {
                     CreateRoomStructure(room);
                 }
+                foreach (RectInt room in doneRooms)
+                {
+                    var tempRoom = new GameObject($"room{i}");
+                    GameObject parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, roomParent.transform);
+                    Destroy(tempRoom);
+                    i++;
+                    toDoFloors = new();
+                    selectedRoom = room;
+                    SpawnFloorsRecursive(discovered, parentGameObject, 1.5f, 1.5f);
+                }
                 AddFloorDoors(doorList, roomParent);
                 marchingSquare.enabled = true;
             }
@@ -195,12 +206,8 @@ public class DungeonGenerator : MonoBehaviour
 
     private void CreateRoomStructure(RectInt room)
     {
-        var tempRoom = new GameObject($"room{i}");
-        GameObject parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, roomParent.transform);
-        Destroy(tempRoom);
-        i++;
         AddWalls(room);
-        AddFloors(room, parentGameObject);
+        // AddFloors(room, parentGameObject);
     }
 
     private void WallDoorList(RectInt door)
@@ -387,19 +394,49 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
     }
-    private void AddFloors(RectInt room, GameObject parentGameObject)
+    private void SpawnFloorsRecursive(List<Vector3> discovered, GameObject parentGameObject, float width, float height)
     {
-        for (int width = 0; width < room.width; width++)
+        if (!wallList.Contains(new(width + selectedRoom.x, height + selectedRoom.y)) && !discovered.Contains(new(width + selectedRoom.x, 0, height + selectedRoom.y)) &&(toDoFloors.Count > 0 || (width == 1.5f && height == 1.5f)))
         {
-            // Debug.Log(room.allPositionsWithin);
-            for (int height = 0; height < room.height; height++)
+            Instantiate(floor, new(width + selectedRoom.x, 0, height + selectedRoom.y), new(1, 0, 0, 1), parentGameObject.transform);
+            discovered.Add(new(width + selectedRoom.x, 0, height + selectedRoom.y));
+            CheckAdjacent(new(width, 0, height), discovered, selectedRoom);
+            if (toDoFloors.Count > 0)
             {
-                if (!wallList.Contains(new(room.x + width + 0.5f, room.y + height + 0.5f)))
-                {
-                    Instantiate(floor, new(width + 0.5f + room.x, 0, height + 0.5f + room.y), new(1, 0, 0, 1), parentGameObject.transform);
-                }
+                SpawnFloorsRecursive(discovered, parentGameObject, toDoFloors[toDoFloors.Count - 1].x, toDoFloors[toDoFloors.Count - 1].z);
+                toDoFloors.Remove(toDoFloors[toDoFloors.Count - 1]);
             }
         }
+        else
+        {
+            return;
+        }
+    }
+    private void CheckAdjacent(Vector3 floor, List<Vector3> discovered, RectInt room)
+    {
+        Vector3 roomchecker = floor + new Vector3(room.x, 0, room.y);
+        List<Vector3> Adjacent = new();
+        if (!wallList.Contains(new(roomchecker.x + 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x + 1, 0, roomchecker.z)))
+        {
+            Adjacent.Add(new(floor.x + 1, 0, floor.z));
+        }
+        if (!wallList.Contains(new(roomchecker.x - 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x - 1, 0, roomchecker.z)))
+        {
+            Adjacent.Add(new(floor.x - 1, 0, floor.z));
+        }
+        if (!wallList.Contains(new(roomchecker.x, roomchecker.z + 1)) && !discovered.Contains(new(roomchecker.x, 0, roomchecker.z + 1)))
+        {
+            Adjacent.Add(new(floor.x, 0, floor.z + 1));
+        }
+        if (!wallList.Contains(new(roomchecker.x, roomchecker.z - 1)) && !discovered.Contains(new(roomchecker.x, 0, roomchecker.z - 1)))
+        {
+            Adjacent.Add(new(floor.x, 0, floor.z - 1));
+        }
+        foreach (var adjacent in Adjacent)
+        {
+            toDoFloors.Add(adjacent);
+        }
+        return;
     }
     private void AddFloorDoors(HashSet<Vector2> doors, GameObject parentGameObject)
     {
