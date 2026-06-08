@@ -1,14 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System;
 using NaughtyAttributes;
 using UnityEngine;
-using Unity.AI.Navigation;
-using System.IO;
-
 [RequireComponent(typeof(DeleteRooms))]
 [RequireComponent(typeof(MarchingSquare))]
+[RequireComponent(typeof(Recursion))]
 public class DungeonGenerator : MonoBehaviour
 {
     public RectInt selectedRoom = new(0, 0, 100, 150);
@@ -39,7 +36,6 @@ public class DungeonGenerator : MonoBehaviour
     private int i = 0;
     private bool canCheck = false;
     private bool checkSplitDone = false;
-    private bool roomsDeleted = false;
     [HideInInspector]
     public GameObject roomParent;
     private bool waitForInput = false;
@@ -47,19 +43,18 @@ public class DungeonGenerator : MonoBehaviour
     [HideInInspector]
     public HashSet<Vector2> wallList = new();
     private HashSet<Vector2> doorList = new();
-    public DeleteRooms deleteRooms;
     private List<Vector3> discovered = new();
-    private List<Vector3> toDoFloors = new();
-    MarchingSquare marchingSquare;
+    [HideInInspector]
+    public List<Vector3> toDoFloors = new();
+    private DeleteRooms deleteRooms;
+    private Recursion recursion;
+    private MarchingSquare marchingSquare;
     [Button("restart Generation")]
     private void RestartRoom()
     {
         selectedRoom = dungeonBounds;
         marchingSquare.dungeonBounds = dungeonBounds;
-        doneRooms.Clear();
-        toDoRooms.Clear();
-        doorsList.Clear();
-        connections.Clear();
+        ClearLists();
         Destroy(roomParent);
         roomParent = new("rooms");
         toDoRooms.Add(selectedRoom);
@@ -67,7 +62,6 @@ public class DungeonGenerator : MonoBehaviour
         percentageDeleted = 0;
         initialRoomsAmount = 0;
         checkSplitDone = false;
-        roomsDeleted = false;
         canCheck = false;
         marchingSquare.currentLocation = new(1, 1);
         marchingSquare.enabled = false;
@@ -78,11 +72,24 @@ public class DungeonGenerator : MonoBehaviour
             rand = new System.Random(seed);
         }
     }
+
+    private void ClearLists()
+    {
+        doneRooms.Clear();
+        toDoRooms.Clear();
+        doorsList.Clear();
+        wallList.Clear();
+        doorList.Clear();
+        connections.Clear();
+        discovered.Clear();
+    }
+
     void Start()
     {
         roomParent = new("rooms");
         dungeonBounds = selectedRoom;
         deleteRooms = GetComponent<DeleteRooms>();
+        recursion = GetComponent<Recursion>();
         marchingSquare = GetComponent<MarchingSquare>();
         marchingSquare.dungeonBounds = dungeonBounds;
         if (seed > 0)
@@ -105,7 +112,7 @@ public class DungeonGenerator : MonoBehaviour
             case SpawnType.automatic:
                 waitForInput = false;
                 goSlow = false;
-                if (checkSplitDone == true)
+                if (checkSplitDone)
                 {
                     marchingSquare.delay = 0;
                     marchingSquare.waitForInput = false;
@@ -114,7 +121,7 @@ public class DungeonGenerator : MonoBehaviour
             case SpawnType.manual:
                 waitForInput = true;
                 goSlow = false;
-                if (checkSplitDone == true)
+                if (checkSplitDone)
                 {
                     marchingSquare.delay = 0;
                     marchingSquare.waitForInput = true;
@@ -123,7 +130,7 @@ public class DungeonGenerator : MonoBehaviour
             case SpawnType.slow:
                 waitForInput = false;
                 goSlow = true;
-                if (checkSplitDone == true)
+                if (checkSplitDone)
                 {
                     marchingSquare.delay = cutSpeed;
                     marchingSquare.waitForInput = false;
@@ -144,7 +151,7 @@ public class DungeonGenerator : MonoBehaviour
             {
                 yield return new WaitUntil(() => Input.GetKey(KeyCode.Space));
             }
-            if (toDoRooms.Count > 0 && checkSplitDone == false)
+            if (toDoRooms.Count > 0 && !checkSplitDone)
             {
                 SplitRoom();
             }
@@ -170,15 +177,11 @@ public class DungeonGenerator : MonoBehaviour
                     i = 1;
                 }
             }
-            else if (checkSplitDone == false)
+            else if (!checkSplitDone)
             {
-                if (!roomsDeleted)
-                {
-                    roomsDeleted = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
-                    checkSplitDone = roomsDeleted;
-                }
+                checkSplitDone = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
             }
-            else if (checkSplitDone == true)
+            else if (checkSplitDone)
             {
                 foreach (RectInt door in doorsList)
                 {
@@ -196,7 +199,7 @@ public class DungeonGenerator : MonoBehaviour
                     i++;
                     toDoFloors = new();
                     selectedRoom = room;
-                    SpawnFloorsRecursive(discovered, parentGameObject, 1.5f, 1.5f);
+                    recursion.SpawnFloorsRecursive(discovered, parentGameObject, 1.5f, 1.5f);
                 }
                 AddFloorDoors(doorList, roomParent);
                 marchingSquare.enabled = true;
@@ -325,50 +328,6 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
     }
-    //checks every room to see if every room are connected to each other if we delete firstRoom, this is used to then delete the firstRoom if all still connect.
-    public bool CheckRooms(RectInt roomToCheck, bool firstRoom)
-    {
-        if (firstRoom)
-        {
-            checkedRooms.Add(selectedRoom);
-        }
-        foreach (Connections connection in connections)
-        {
-            if (connection.roomOne == roomToCheck && !checkedRooms.Contains(connection.roomTwo))
-            {
-                if (!toDoRooms.Contains(connection.roomTwo))
-                {
-                    toDoRooms.Add(connection.roomTwo);
-                }
-            }
-            else if (connection.roomTwo == roomToCheck && !checkedRooms.Contains(connection.roomOne))
-            {
-                if (!toDoRooms.Contains(connection.roomOne))
-                {
-                    toDoRooms.Add(connection.roomOne);
-                }
-            }
-        }
-        checkedRooms.Add(roomToCheck);
-        toDoRooms.Remove(roomToCheck);
-        if (checkedRooms.Count == doneRooms.Count + 1)
-        {
-            checkedRooms.Clear();
-            toDoRooms.Clear();
-            return true;
-        }
-        else if (toDoRooms.Count == 0)
-        {
-            checkedRooms.Clear();
-            toDoRooms.Clear();
-            return false;
-        }
-        if (!CheckRooms(toDoRooms[0], false))
-        {
-            return false;
-        }
-        return true;
-    }
     private void AddWalls(RectInt room)
     {
         for (int width = 0; width < room.width; width++)
@@ -394,50 +353,6 @@ public class DungeonGenerator : MonoBehaviour
             }
         }
     }
-    private void SpawnFloorsRecursive(List<Vector3> discovered, GameObject parentGameObject, float width, float height)
-    {
-        if (!wallList.Contains(new(width + selectedRoom.x, height + selectedRoom.y)) && !discovered.Contains(new(width + selectedRoom.x, 0, height + selectedRoom.y)) &&(toDoFloors.Count > 0 || (width == 1.5f && height == 1.5f)))
-        {
-            Instantiate(floor, new(width + selectedRoom.x, 0, height + selectedRoom.y), new(1, 0, 0, 1), parentGameObject.transform);
-            discovered.Add(new(width + selectedRoom.x, 0, height + selectedRoom.y));
-            CheckAdjacent(new(width, 0, height), discovered, selectedRoom);
-            if (toDoFloors.Count > 0)
-            {
-                SpawnFloorsRecursive(discovered, parentGameObject, toDoFloors[toDoFloors.Count - 1].x, toDoFloors[toDoFloors.Count - 1].z);
-                toDoFloors.Remove(toDoFloors[toDoFloors.Count - 1]);
-            }
-        }
-        else
-        {
-            return;
-        }
-    }
-    private void CheckAdjacent(Vector3 floor, List<Vector3> discovered, RectInt room)
-    {
-        Vector3 roomchecker = floor + new Vector3(room.x, 0, room.y);
-        List<Vector3> Adjacent = new();
-        if (!wallList.Contains(new(roomchecker.x + 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x + 1, 0, roomchecker.z)))
-        {
-            Adjacent.Add(new(floor.x + 1, 0, floor.z));
-        }
-        if (!wallList.Contains(new(roomchecker.x - 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x - 1, 0, roomchecker.z)))
-        {
-            Adjacent.Add(new(floor.x - 1, 0, floor.z));
-        }
-        if (!wallList.Contains(new(roomchecker.x, roomchecker.z + 1)) && !discovered.Contains(new(roomchecker.x, 0, roomchecker.z + 1)))
-        {
-            Adjacent.Add(new(floor.x, 0, floor.z + 1));
-        }
-        if (!wallList.Contains(new(roomchecker.x, roomchecker.z - 1)) && !discovered.Contains(new(roomchecker.x, 0, roomchecker.z - 1)))
-        {
-            Adjacent.Add(new(floor.x, 0, floor.z - 1));
-        }
-        foreach (var adjacent in Adjacent)
-        {
-            toDoFloors.Add(adjacent);
-        }
-        return;
-    }
     private void AddFloorDoors(HashSet<Vector2> doors, GameObject parentGameObject)
     {
         foreach (Vector2 door in doorList)
@@ -447,18 +362,5 @@ public class DungeonGenerator : MonoBehaviour
         }
     }
 }
-[System.Serializable]
-public class Connections
-{
-    public RectInt door;
-    public RectInt roomOne;
-    public RectInt roomTwo;
 
-    public Connections(RectInt door, RectInt roomOne, RectInt roomTwo)
-    {
-        this.door = door;
-        this.roomOne = roomOne;
-        this.roomTwo = roomTwo;
-    }
-}
 

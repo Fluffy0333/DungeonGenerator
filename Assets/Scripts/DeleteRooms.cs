@@ -15,7 +15,7 @@ public class DeleteRooms : MonoBehaviour
     {
         dungeonGenerator.selectedRoom = doneRooms[0];
         doneRooms.Remove(dungeonGenerator.selectedRoom);
-        if (dungeonGenerator.CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true))
+        if (CheckRooms(doneRooms[rand.Next(0, doneRooms.Count)], true, dungeonGenerator.selectedRoom))
         {
             DeleteRoom(dungeonGenerator.selectedRoom);
             percentageDeleted += 1 / (initialRoomsAmount / 100);
@@ -54,5 +54,49 @@ public class DeleteRooms : MonoBehaviour
                 dungeonGenerator.doorsList.Remove(connection.door);
             }
         }
+    }
+        //checks every room to see if every room are connected to each other if we delete firstRoom, this is used to then delete the firstRoom if all still connect.
+    public bool CheckRooms(RectInt roomToCheck, bool firstRoom, RectInt selectedRoom)
+    {
+        if (firstRoom)
+        {
+            dungeonGenerator.checkedRooms.Add(selectedRoom);
+        }
+        foreach (Connections connection in dungeonGenerator.connections)
+        {
+            if (connection.roomOne == roomToCheck && !dungeonGenerator.checkedRooms.Contains(connection.roomTwo))
+            {
+                if (!dungeonGenerator.toDoRooms.Contains(connection.roomTwo))
+                {
+                    dungeonGenerator.toDoRooms.Add(connection.roomTwo);
+                }
+            }
+            else if (connection.roomTwo == roomToCheck && !dungeonGenerator.checkedRooms.Contains(connection.roomOne))
+            {
+                if (!dungeonGenerator.toDoRooms.Contains(connection.roomOne))
+                {
+                    dungeonGenerator.toDoRooms.Add(connection.roomOne);
+                }
+            }
+        }
+        dungeonGenerator.checkedRooms.Add(roomToCheck);
+        dungeonGenerator.toDoRooms.Remove(roomToCheck);
+        if (dungeonGenerator.checkedRooms.Count == dungeonGenerator.doneRooms.Count + 1)
+        {
+            dungeonGenerator.checkedRooms.Clear();
+            dungeonGenerator.toDoRooms.Clear();
+            return true;
+        }
+        else if (dungeonGenerator.toDoRooms.Count == 0)
+        {
+            dungeonGenerator.checkedRooms.Clear();
+            dungeonGenerator.toDoRooms.Clear();
+            return false;
+        }
+        if (!CheckRooms(dungeonGenerator.toDoRooms[0], false, dungeonGenerator.selectedRoom))
+        {
+            return false;
+        }
+        return true;
     }
 }
