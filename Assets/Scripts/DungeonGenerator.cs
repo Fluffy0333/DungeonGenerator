@@ -6,72 +6,66 @@ using UnityEngine;
 [RequireComponent(typeof(DeleteRooms))]
 [RequireComponent(typeof(MarchingSquare))]
 [RequireComponent(typeof(Recursion))]
+[RequireComponent(typeof(SplittingRooms))]
+[RequireComponent(typeof(RoomsStructure))]
 public class DungeonGenerator : MonoBehaviour
 {
-    public RectInt selectedRoom = new(0, 0, 100, 150);
+    //lists here
     public List<RectInt> toDoRooms;
     public List<RectInt> doneRooms;
     public List<RectInt> doorsList;
     public List<RectInt> checkedRooms;
     public List<Connections> connections = new();
+
+    //public variables here
+    public RectInt selectedRoom = new(0, 0, 100, 150);
     public GameObject floor;
     public int minSize = 7;
     public enum SpawnType { automatic, manual, slow };
     public SpawnType spawnType;
-    public float cutSpeed = 0.1f;
+    public float slowModeSpeed = 0.1f;
     [Range(0, 75)]
     public float percentageToDelete;
     public int removeAttempts = 5;
     public int seed;
+
+    //public hideininspector here
     [HideInInspector]
     public System.Random rand = new();
-    private RectInt savedRoom;
-    private RectInt dungeonBounds;
     [HideInInspector]
     public int removeAttemptAmount;
     [HideInInspector]
     public float percentageDeleted;
-    private float initialRoomsAmount;
-    private int sizeToRemove;
-    private int roomNumber = 0;
-    private bool connectionsMade = false;
-    private bool checkSplitDone = false;
     [HideInInspector]
     public GameObject roomParent;
+
+    //private variables here
+    private RectInt dungeonBoundaries;
+    private float initialRoomsAmount;
+    private int roomNumber = 0;
+    private bool madeRoomStructure = false;
     private bool waitForInput = false;
     private bool goSlow = false;
-    [HideInInspector]
-    public HashSet<Vector2> wallList = new();
-    private HashSet<Vector2> doorList = new();
-    private List<Vector2> discovered = new();
-    [HideInInspector]
-    public List<Vector3> toDoFloors = new();
     private DeleteRooms deleteRooms;
     private Recursion recursion;
     private SplittingRooms splittingRooms;
     private MarchingSquare marchingSquare;
+    private RoomsStructure roomsStructure;
+
+    //buttons here
     [Button("restart Generation")]
     private void RestartRoom()
     {
-        selectedRoom = dungeonBounds;
-        marchingSquare.dungeonBounds = dungeonBounds;
+        //reset everything back to the default
+        selectedRoom = dungeonBoundaries;
+        marchingSquare.dungeonBoundaries = dungeonBoundaries;
         ClearLists();
         Destroy(roomParent);
         roomParent = new("rooms");
         toDoRooms.Add(selectedRoom);
-        removeAttemptAmount = 0;
-        percentageDeleted = 0;
-        initialRoomsAmount = 0;
-        checkSplitDone = false;
-        connectionsMade = false;
-        marchingSquare.currentLocation = new(1, 1);
-        marchingSquare.enabled = false;
-        roomNumber = 0;
+        ClearVariables();
         StartCoroutine(BeginCutting());
-        if (seed > 0)
-        {
-            rand = new System.Random(seed);
-        }
+        rand = new System.Random(seed);
     }
 
     private void ClearLists()
@@ -79,25 +73,33 @@ public class DungeonGenerator : MonoBehaviour
         doneRooms.Clear();
         toDoRooms.Clear();
         doorsList.Clear();
-        wallList.Clear();
-        doorList.Clear();
+        roomsStructure.wallList.Clear();
+        roomsStructure.doorList.Clear();
         connections.Clear();
-        discovered.Clear();
+    }
+    private void ClearVariables()
+    {
+        removeAttemptAmount = 0;
+        percentageDeleted = 0;
+        initialRoomsAmount = 0;
+        madeRoomStructure = false;
+        marchingSquare.currentLocation = new(1, 1);
+        marchingSquare.enabled = false;
+        roomNumber = 0;
     }
 
     void Start()
     {
         roomParent = new("rooms");
-        dungeonBounds = selectedRoom;
+        //selectedroom in this case is the very first room that is made which will then split down
+        dungeonBoundaries = selectedRoom;
         deleteRooms = GetComponent<DeleteRooms>();
         recursion = GetComponent<Recursion>();
         marchingSquare = GetComponent<MarchingSquare>();
         splittingRooms = GetComponent<SplittingRooms>();
-        marchingSquare.dungeonBounds = dungeonBounds;
-        if (seed > 0)
-        {
-            rand = new System.Random(seed);
-        }
+        roomsStructure = GetComponent<RoomsStructure>();
+        marchingSquare.dungeonBoundaries = dungeonBoundaries;
+        rand = new System.Random(seed);
         toDoRooms.Add(selectedRoom);
         CheckSpawnType();
         StartCoroutine(BeginCutting());
@@ -111,10 +113,11 @@ public class DungeonGenerator : MonoBehaviour
     {
         switch (spawnType)
         {
+            //waitforinput = wait for spacebar and goslow means it will wait everytime with a variable that can be set in the inspecter equivalent to slowModeSpeed.
             case SpawnType.automatic:
                 waitForInput = false;
                 goSlow = false;
-                if (checkSplitDone)
+                if (madeRoomStructure)
                 {
                     marchingSquare.delay = 0;
                     marchingSquare.waitForInput = false;
@@ -123,7 +126,7 @@ public class DungeonGenerator : MonoBehaviour
             case SpawnType.manual:
                 waitForInput = true;
                 goSlow = false;
-                if (checkSplitDone)
+                if (madeRoomStructure)
                 {
                     marchingSquare.delay = 0;
                     marchingSquare.waitForInput = true;
@@ -132,9 +135,9 @@ public class DungeonGenerator : MonoBehaviour
             case SpawnType.slow:
                 waitForInput = false;
                 goSlow = true;
-                if (checkSplitDone)
+                if (madeRoomStructure)
                 {
-                    marchingSquare.delay = cutSpeed;
+                    marchingSquare.delay = slowModeSpeed;
                     marchingSquare.waitForInput = false;
                 }
                 break;
@@ -142,84 +145,58 @@ public class DungeonGenerator : MonoBehaviour
     }
     IEnumerator BeginCutting()
     {
+        //if it does not wait for 0.1f seconds some things haven't loaded yet and gives a null exception error
         yield return new WaitForSeconds(0.1f);
 
         while (!marchingSquare.enabled)
         {
+            //slow mode / manual mode checkers
             if (goSlow)
             {
-                yield return new WaitForSeconds(cutSpeed);
+                yield return new WaitForSeconds(slowModeSpeed);
             }
             else if (waitForInput)
             {
                 yield return new WaitUntil(() => Input.GetKey(KeyCode.Space));
             }
 
-            if (toDoRooms.Count > 0 && !checkSplitDone)
+            if (toDoRooms.Count > 0 && !madeRoomStructure)
             {
                 splittingRooms.SplitRoom();
             }
             else if (initialRoomsAmount == 0)
             {
+                //how many rooms are there in total when all rooms have been split?
                 initialRoomsAmount = doneRooms.Count;
                 //sort rooms based on smallest to biggest
                 doneRooms.Sort((a, b) => (a.width + a.height).CompareTo(b.width + b.height));
             }
-            else if (!connectionsMade)
+            else if (roomNumber < doneRooms.Count)
             {
-                //make the connections from door to room a and room b
-                if (roomNumber < doneRooms.Count)
+                //make the connections from door to room a and room b this is not a for loop so that it can be slowed with slow and manual
+                selectedRoom = doneRooms[roomNumber];
+                //check with selected room each room and which of them are adjacent, this is in a for loop as it would otherwise seem like it's not doing anything in slow / manual mode
+                for (int secondRoomNumber = roomNumber + 1; secondRoomNumber < doneRooms.Count; secondRoomNumber++)
                 {
-                    selectedRoom = doneRooms[roomNumber];
-                    for (int j = roomNumber + 1; j < doneRooms.Count; j++)
+                    RectInt secondRoom = doneRooms[secondRoomNumber];
+                    //if the two rooms intersect, try to place a door in the middle
+                    if (AlgorithmsUtils.Intersects(selectedRoom, secondRoom))
                     {
-                        CheckSplits(roomNumber, j);
+                        CheckIntersection(selectedRoom, secondRoom);
                     }
-                    roomNumber++;
                 }
-                else if (roomNumber >= doneRooms.Count)
-                {
-                    connectionsMade = true;
-                    roomNumber = 1;
-                }
+                roomNumber++;
             }
-            else if (!checkSplitDone)
+            else if (!madeRoomStructure)
             {
-                checkSplitDone = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
+                //when it's done with deleting all the rooms it will tell it that the roomstructure is made, it will then 
+                madeRoomStructure = deleteRooms.CheckDeleteRoom(connections, doneRooms, rand, percentageDeleted, initialRoomsAmount, removeAttempts, percentageToDelete, doorsList);
             }
-            else if (checkSplitDone)
+            else if (madeRoomStructure)
             {
-                foreach (RectInt door in doorsList)
-                {
-                    WallDoorList(door);
-                }
-                foreach (RectInt room in doneRooms)
-                {
-                    AddWalls(room);
-                }
-                foreach (RectInt room in doneRooms)
-                {
-                    var tempRoom = new GameObject($"room{roomNumber}");
-                    GameObject parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, roomParent.transform);
-                    Destroy(tempRoom);
-                    roomNumber++;
-                    toDoFloors = new();
-                    selectedRoom = room;
-                    recursion.SpawnFloorsRecursive(discovered, parentGameObject, 1.5f, 1.5f);
-                }
-                AddFloorDoors(doorList, roomParent);
-                marchingSquare.enabled = true;
+                CreateFlooring();
             }
         }
-    }
-
-    private void WallDoorList(RectInt door)
-    {
-        //door.x/door.y is the bottom left/right of the door, adding 0.5f to x and y is (1,1) then adding the half of the height/width + 0.5f is either (2,1) or (1, 2) depending if the door is in height or width length.
-        doorList.Add(new(door.x + 0.5f, door.y + 0.5f));
-        doorList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
-        wallList.Add(new(door.x + 0.5f, door.y + 0.5f));
-        wallList.Add(new(door.x + door.width / 2 + 0.5f, door.y + door.height / 2 + 0.5f));
     }
 
     //shows all rooms/doors/connections/currentroom with debug.
@@ -242,61 +219,48 @@ public class DungeonGenerator : MonoBehaviour
             Debug.DrawLine(new(connection.door.x + connection.door.width / 2f, 0, connection.door.y + connection.door.height / 2f), new(connection.roomOne.x + connection.roomOne.width / 2f, 0, connection.roomOne.y + connection.roomOne.height / 2f), Color.red);
             Debug.DrawLine(new(connection.door.x + connection.door.width / 2f, 0, connection.door.y + connection.door.height / 2f), new(connection.roomTwo.x + connection.roomTwo.width / 2f, 0, connection.roomTwo.y + connection.roomTwo.height / 2f), Color.red);
         }
+        //the room that is currently busy / last used room
         AlgorithmsUtils.DebugRectInt(selectedRoom, Color.blue);
     }
     //check if a room connects to another room. O(n²)
-    private void CheckSplits(int firstRoomNumber, int secondRoomNumber)
+    private void CheckIntersection(RectInt firstRoom, RectInt secondRoom)
     {
-        RectInt firstRoom = doneRooms[firstRoomNumber];
-        RectInt secondRoom = doneRooms[secondRoomNumber];
-        if (AlgorithmsUtils.Intersects(firstRoom, secondRoom))
+        RectInt doorPlacement = AlgorithmsUtils.Intersect(firstRoom, secondRoom);
+        doorPlacement = Doors.MakeDoor(doorPlacement);
+        //if the door was made, make a connection with the door, firstroom and secondroom
+        if (doorPlacement != RectInt.zero)
         {
-            //if the two rooms intersect, try to place a door in the middle
-            RectInt doorPlacement = AlgorithmsUtils.Intersect(firstRoom, secondRoom);
-            doorPlacement = Doors.MakeDoor(doorPlacement);
-            //if the door was made, make a connection with the door, firstroom and secondroom
-            if (doorPlacement != RectInt.zero)
-            {
-                doorsList.Add(doorPlacement);
-                connections.Add(new Connections(doorPlacement, firstRoom, secondRoom));
-            }
+            doorsList.Add(doorPlacement);
+            connections.Add(new Connections(doorPlacement, firstRoom, secondRoom));
         }
     }
-    private void AddWalls(RectInt room)
+    private void CreateFlooring()
     {
-        for (int width = 0; width < room.width; width++)
+        foreach (RectInt room in doneRooms)
         {
-            float widthLocation = room.x + width + 0.5f;
-            float heightLocation = room.y + room.height - 0.5f;
-            if (!wallList.Contains(new(widthLocation, room.y + 0.5f)))
-            {
-                wallList.Add(new(widthLocation, room.y + 0.5f));
-            }
-            if (!wallList.Contains(new(widthLocation, heightLocation)))
-            {
-                wallList.Add(new(widthLocation, heightLocation));
-            }
+            //take the boundries of each room and add them to the wall list.
+            roomsStructure.AddWalls(room);
         }
-        for (int height = 0; height < room.height; height++)
+        int currentRoomNumber = 1;
+        foreach (RectInt room in doneRooms)
         {
-            float widthLocation = room.x + room.width - 0.5f;
-            float heightLocation = room.y + height + 0.5f;
-            if (!wallList.Contains(new(room.x + 0.5f, heightLocation)))
-            {
-                wallList.Add(new(room.x + 0.5f, heightLocation));
-            }
-            if (!wallList.Contains(new(widthLocation, heightLocation)))
-            {
-                wallList.Add(new(widthLocation, heightLocation));
-            }
+            //all floors belong to a different room and this will tell us that, 
+            currentRoomNumber = LayFloors(currentRoomNumber, room);
         }
+        //finally add the floor to doors and remove them from the wall list and begin marching!
+        roomsStructure.AddFloorToDoors(roomsStructure.doorList, roomParent);
+        marchingSquare.enabled = true;
     }
-    private void AddFloorDoors(HashSet<Vector2> doors, GameObject parentGameObject)
+
+    private int LayFloors(int currentRoomNumber, RectInt room)
     {
-        foreach (Vector2 door in doorList)
-        {
-            Instantiate(floor, new(door.x, 0, door.y), new(1, 0, 0, 1), parentGameObject.transform);
-            wallList.Remove(door);
-        }
+        var tempRoom = new GameObject($"room{currentRoomNumber}");
+        GameObject parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, roomParent.transform);
+        Destroy(tempRoom);
+        currentRoomNumber++;
+        selectedRoom = room;
+        List<Vector2> discovered = new();
+        recursion.SpawnFloorsRecursive(discovered, parentGameObject, 1.5f, 1.5f);
+        return currentRoomNumber;
     }
 }

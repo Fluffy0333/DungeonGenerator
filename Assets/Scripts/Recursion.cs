@@ -1,26 +1,32 @@
 using System.Collections.Generic;
 using UnityEngine;
 [RequireComponent(typeof(DungeonGenerator))]
+[RequireComponent(typeof(RoomsStructure))]
 public class Recursion : MonoBehaviour
 {
-    DungeonGenerator dungeonGenerator;
+    private DungeonGenerator dungeonGenerator;
+    private RoomsStructure roomsStructure;
+    private List<Vector3> toDoFloors = new();
     private void Start() {
+        roomsStructure = GetComponent<RoomsStructure>();
         dungeonGenerator = GetComponent<DungeonGenerator>();
     }
     public void SpawnFloorsRecursive(List<Vector2> discovered, GameObject parentGameObject, float width, float height)
     {
-        if (!dungeonGenerator.wallList.Contains(new(width + dungeonGenerator.selectedRoom.x, height + dungeonGenerator.selectedRoom.y)) && !discovered.Contains(new(width + dungeonGenerator.selectedRoom.x, height + dungeonGenerator.selectedRoom.y)) && (dungeonGenerator.toDoFloors.Count > 0 || (width == 1.5f && height == 1.5f)))
+        Vector2 floorPosition = new(width + dungeonGenerator.selectedRoom.x, height + dungeonGenerator.selectedRoom.y);
+        if (!roomsStructure.wallList.Contains(floorPosition) && !discovered.Contains(floorPosition) && (toDoFloors.Count > 0 || (width == 1.5f && height == 1.5f)))
         {
-            Instantiate(dungeonGenerator.floor, new(width + dungeonGenerator.selectedRoom.x, 0, height + dungeonGenerator.selectedRoom.y), new(1, 0, 0, 1), parentGameObject.transform);
-            discovered.Add(new(width + dungeonGenerator.selectedRoom.x, height + dungeonGenerator.selectedRoom.y));
+            Instantiate(dungeonGenerator.floor, new(floorPosition.x, 0, floorPosition.y), new(1, 0, 0, 1), parentGameObject.transform);
+            discovered.Add(floorPosition);
             foreach (Vector3 nextToEachOther in CheckAdjacent(new(width, 0, height), discovered, dungeonGenerator.selectedRoom))
             {
-                dungeonGenerator.toDoFloors.Add(nextToEachOther);
+                toDoFloors.Add(nextToEachOther);
             }
-            if (dungeonGenerator.toDoFloors.Count > 0)
+            if (toDoFloors.Count > 0)
             {
-                SpawnFloorsRecursive(discovered, parentGameObject, dungeonGenerator.toDoFloors[dungeonGenerator.toDoFloors.Count - 1].x, dungeonGenerator.toDoFloors[dungeonGenerator.toDoFloors.Count - 1].z);
-                dungeonGenerator.toDoFloors.Remove(dungeonGenerator.toDoFloors[dungeonGenerator.toDoFloors.Count - 1]);
+                Vector3 chosenFloor = toDoFloors[toDoFloors.Count - 1];
+                SpawnFloorsRecursive(discovered, parentGameObject, chosenFloor.x, chosenFloor.z);
+                toDoFloors.Remove(chosenFloor);
             }
         }
         else
@@ -30,21 +36,21 @@ public class Recursion : MonoBehaviour
     }
     private List<Vector3> CheckAdjacent(Vector3 floor, List<Vector2> discovered, RectInt room)
     {
-        Vector3 roomchecker = floor + new Vector3(room.x, 0, room.y);
+        Vector3 roomFloorChecker = floor + new Vector3(room.x, 0, room.y);
         List<Vector3> Adjacent = new();
-        if (!dungeonGenerator.wallList.Contains(new(roomchecker.x + 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x + 1, roomchecker.z)))
+        if (!roomsStructure.wallList.Contains(new(roomFloorChecker.x + 1, roomFloorChecker.z)) && !discovered.Contains(new(roomFloorChecker.x + 1, roomFloorChecker.z)))
         {
             Adjacent.Add(new(floor.x + 1, 0, floor.z));
         }
-        if (!dungeonGenerator.wallList.Contains(new(roomchecker.x - 1, roomchecker.z)) && !discovered.Contains(new(roomchecker.x - 1, roomchecker.z)))
+        if (!roomsStructure.wallList.Contains(new(roomFloorChecker.x - 1, roomFloorChecker.z)) && !discovered.Contains(new(roomFloorChecker.x - 1, roomFloorChecker.z)))
         {
             Adjacent.Add(new(floor.x - 1, 0, floor.z));
         }
-        if (!dungeonGenerator.wallList.Contains(new(roomchecker.x, roomchecker.z + 1)) && !discovered.Contains(new(roomchecker.x, roomchecker.z + 1)))
+        if (!roomsStructure.wallList.Contains(new(roomFloorChecker.x, roomFloorChecker.z + 1)) && !discovered.Contains(new(roomFloorChecker.x, roomFloorChecker.z + 1)))
         {
             Adjacent.Add(new(floor.x, 0, floor.z + 1));
         }
-        if (!dungeonGenerator.wallList.Contains(new(roomchecker.x, roomchecker.z - 1)) && !discovered.Contains(new(roomchecker.x, roomchecker.z - 1)))
+        if (!roomsStructure.wallList.Contains(new(roomFloorChecker.x, roomFloorChecker.z - 1)) && !discovered.Contains(new(roomFloorChecker.x, roomFloorChecker.z - 1)))
         {
             Adjacent.Add(new(floor.x, 0, floor.z - 1));
         }

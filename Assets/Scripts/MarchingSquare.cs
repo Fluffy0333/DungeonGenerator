@@ -7,13 +7,14 @@ using UnityEngine;
 public class MarchingSquare : MonoBehaviour
 {
     private DungeonGenerator dungeonGenerator;
+    private RoomsStructure roomsStructure;
     public Vector2Int currentLocation = new(1, 1);
     public NavMeshSurface navMeshSurface;
     private int totalNumber;
     private bool placeWalls = false;
     private GameObject parentGameObject;
     [HideInInspector]
-    public RectInt dungeonBounds;
+    public RectInt dungeonBoundaries;
     [HideInInspector]
     public float delay = 0f;
     [HideInInspector]
@@ -24,6 +25,7 @@ public class MarchingSquare : MonoBehaviour
     void OnEnable()
     {
         dungeonGenerator = GetComponent<DungeonGenerator>();
+        roomsStructure = GetComponent<RoomsStructure>();
         var tempRoom = new GameObject($"walls");
         parentGameObject = Instantiate(tempRoom, transform.position, transform.rotation, dungeonGenerator.roomParent.transform);
         Destroy(tempRoom);
@@ -40,9 +42,9 @@ public class MarchingSquare : MonoBehaviour
     }
     IEnumerator PlaceWalls()
     {
-        for (int height = 0; height < dungeonBounds.height; height++)
+        for (int height = 0; height < dungeonBoundaries.height; height++)
         {
-            for (int width = 0; width < dungeonBounds.width; width++)
+            for (int width = 0; width < dungeonBoundaries.width; width++)
             {
                 totalNumber = 0;
                 if (delay > 0)
@@ -53,27 +55,27 @@ public class MarchingSquare : MonoBehaviour
                 {
                     WaitUntil wait = new(() => Input.GetKeyDown(KeyCode.Space));
                 }
-                currentLocation = new(dungeonBounds.x + width, dungeonBounds.y + height);
+                currentLocation = new(dungeonBoundaries.x + width, dungeonBoundaries.y + height);
                 Vector2 topLeft = new(currentLocation.x - 0.5f, currentLocation.y + 0.5f);
                 Vector2 topRight = new(currentLocation.x + 0.5f, currentLocation.y + 0.5f);
                 Vector2 bottomLeft = new(currentLocation.x - 0.5f, currentLocation.y - 0.5f);
                 Vector2 bottomRight = new(currentLocation.x + 0.5f, currentLocation.y - 0.5f);
-                if (dungeonGenerator.wallList.Contains(bottomRight))
+                if (roomsStructure.wallList.Contains(bottomRight))
                 {
                     totalNumber += 1;
                 }
 
-                if (dungeonGenerator.wallList.Contains(topRight))
+                if (roomsStructure.wallList.Contains(topRight))
                 {
                     totalNumber += (1 << 1);
                 }
 
-                if (dungeonGenerator.wallList.Contains(topLeft))
+                if (roomsStructure.wallList.Contains(topLeft))
                 {
                     totalNumber += (1 << 2);
                 }
 
-                if (dungeonGenerator.wallList.Contains(bottomLeft))
+                if (roomsStructure.wallList.Contains(bottomLeft))
                 {
                     totalNumber += (1 << 3);
                 }
