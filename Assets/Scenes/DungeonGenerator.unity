@@ -492,6 +492,8 @@ GameObject:
   - component: {fileID: 1310489899}
   - component: {fileID: 1310489901}
   - component: {fileID: 1310489902}
+  - component: {fileID: 1310489903}
+  - component: {fileID: 1310489904}
   m_Layer: 0
   m_Name: '- Dungeon Generator -'
   m_TagString: Untagged
@@ -531,7 +533,7 @@ MonoBehaviour:
   removeAttemptAmount: 0
   percentageDeleted: 0
   roomParent: {fileID: 0}
-  deleteRooms: {fileID: 1310489901}
+  toDoFloors: []
 --- !u!4 &1310489900
 Transform:
   m_ObjectHideFlags: 0
@@ -597,6 +599,30 @@ MonoBehaviour:
   - {fileID: 5853187014843131501, guid: 272fb9cc01e08f247b43f7e6c38dfdfb, type: 3}
   - {fileID: 6898582374593550339, guid: ae8cbe638b9f7074dbc7244fb3c26600, type: 3}
   - {fileID: 0}
+--- !u!114 &1310489903
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1310489898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5847f814a971f44986b43fca91c5071, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+--- !u!114 &1310489904
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1310489898}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a89e0fb4328d7aa4e8c7a78b836c7ffe, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!195 &2051605247 stripped
 NavMeshAgent:
   m_CorrespondingSourceObject: {fileID: 3474117180408204156, guid: 97ffe15e4f4a108459262cf9f23bc423, type: 3}

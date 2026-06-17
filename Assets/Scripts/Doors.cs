@@ -3,38 +3,37 @@ using UnityEngine;
 public class Doors : MonoBehaviour
 {
     //makes a door, if the door is too small (space that is 3 or lower (1x1, 2x1/1x2, 3x1/1x3)) don't make it, if the door is too big make it smaller till it is an 2x1/1x2.
-    public static RectInt MakeDoor(RectInt savedRoom)
+    public static RectInt MakeDoor(RectInt selectedRoom)
     {
-        if (savedRoom.width == 3 || savedRoom.height == 3)
+        if (selectedRoom.width == 3 || selectedRoom.height == 3)
         {
-
+            return RectInt.zero;
         }
-        else if (savedRoom.width > 2)
+        else if (selectedRoom.width > 2 || selectedRoom.height > 2)
         {
-            while (savedRoom.width > 2)
+            while (selectedRoom.width > 2)
             {
-                savedRoom.width--;
-                if (savedRoom.width > 2)
+                selectedRoom.width--;
+                if (selectedRoom.width > 2)
                 {
-                    savedRoom.width--;
-                    savedRoom.x++;
+                    selectedRoom.width--;
+                    selectedRoom.x++;
                 }
             }
-            return savedRoom;
-        }
-        else if (savedRoom.height > 2)
-        {
-            while (savedRoom.height > 2)
+            while (selectedRoom.height > 2)
             {
-                savedRoom.height--;
-                if (savedRoom.height > 2)
+                selectedRoom.height--;
+                if (selectedRoom.height > 2)
                 {
-                    savedRoom.height--;
-                    savedRoom.y++;
+                    selectedRoom.height--;
+                    selectedRoom.y++;
                 }
             }
-            return savedRoom;
+            return selectedRoom;
         }
-        return RectInt.zero;
+        else
+        {
+            return RectInt.zero;
+        }
     }
 }
